@@ -1,10 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 
-export default function ReviewPage() {
+function ReviewPageContent() {
   const searchParams = useSearchParams()
   const bookingId = searchParams.get('booking')
 
@@ -223,5 +223,13 @@ export default function ReviewPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function ReviewPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-cream flex items-center justify-center"><div>Loading...</div></div>}>
+      <ReviewPageContent />
+    </Suspense>
   )
 }

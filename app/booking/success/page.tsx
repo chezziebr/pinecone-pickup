@@ -2,8 +2,9 @@
 
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
+import { Suspense } from 'react'
 
-export default function BookingSuccess() {
+function BookingSuccessContent() {
   const searchParams = useSearchParams()
 
   const name = searchParams.get('name') || 'there'
@@ -129,5 +130,13 @@ export default function BookingSuccess() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function BookingSuccess() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-cream flex items-center justify-center"><div>Loading...</div></div>}>
+      <BookingSuccessContent />
+    </Suspense>
   )
 }
