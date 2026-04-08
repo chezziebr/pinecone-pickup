@@ -1,8 +1,23 @@
 @import "tailwindcss";
 
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --pine: #2D5016;
+  --pine-mid: #3D6B1F;
+  --pine-light: #F0F5E8;
+  --orange: #E8650A;
+  --orange-light: #FFF4EC;
+  --cream: #FDFAF4;
+  --dark: #1A1A1A;
+  --muted: #5C5C4A;
+  --border: #D4CEBC;
+  --background: #FDFAF4;
+  --foreground: #1A1A1A;
 }
 
 @theme inline {
@@ -16,15 +31,21 @@
   font-family: var(--font-fraunces);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+body {
+  font-family: var(--font-dm-sans), 'DM Sans', sans-serif;
+  background: var(--cream);
+  color: var(--dark);
+  line-height: 1.5;
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
-}
+/* Override Tailwind classes with our custom styling */
+.bg-pine { background-color: var(--pine) !important; }
+.bg-pine-light { background-color: var(--pine-light) !important; }
+.bg-orange { background-color: var(--orange) !important; }
+.bg-orange-light { background-color: var(--orange-light) !important; }
+.bg-cream { background-color: var(--cream) !important; }
+.text-pine { color: var(--pine) !important; }
+.text-pine-light { color: #A8D468 !important; }
+.text-orange { color: var(--orange) !important; }
+.border-pine { border-color: var(--pine) !important; }
+.border-orange { border-color: var(--orange) !important; }

@@ -15,6 +15,13 @@ export default {
         orange: '#E8650A',
         'orange-light': '#FFF4EC',
         cream: '#FDFAF4',
+        dark: '#1A1A1A',
+        muted: '#5C5C4A',
+        border: '#D4CEBC',
+      },
+      fontFamily: {
+        'fraunces': ['var(--font-fraunces)', 'serif'],
+        'sans': ['var(--font-dm-sans)', 'DM Sans', 'sans-serif'],
       },
     },
   },
