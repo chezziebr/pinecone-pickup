@@ -9,15 +9,15 @@ export default {
   theme: {
     extend: {
       colors: {
-        pine: '#2D5016',
-        'pine-mid': '#3D6B1F',
-        'pine-light': '#F0F5E8',
-        orange: '#E8650A',
-        'orange-light': '#FFF4EC',
-        cream: '#FDFAF4',
-        dark: '#1A1A1A',
-        muted: '#5C5C4A',
-        border: '#D4CEBC',
+        pine: '#7B8471',
+        'pine-mid': '#9BA087',
+        'pine-light': '#F5F7F3',
+        orange: '#D4735B',
+        'orange-light': '#F9F1ED',
+        cream: '#FDFCFA',
+        dark: '#2A2A2A',
+        muted: '#6B7280',
+        border: '#E5E7EB',
       },
       fontFamily: {
         'fraunces': ['var(--font-fraunces)', 'serif'],
