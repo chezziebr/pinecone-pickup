@@ -1,11 +1,5 @@
 @import "tailwindcss";
 
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
 :root {
   --pine: #2D5016;
   --pine-mid: #3D6B1F;
@@ -35,10 +29,9 @@ body {
   font-family: var(--font-dm-sans), 'DM Sans', sans-serif;
   background: var(--cream);
   color: var(--dark);
-  line-height: 1.5;
 }
 
-/* Override Tailwind classes with our custom styling */
+/* Custom color overrides - keep layout classes intact */
 .bg-pine { background-color: var(--pine) !important; }
 .bg-pine-light { background-color: var(--pine-light) !important; }
 .bg-orange { background-color: var(--orange) !important; }
