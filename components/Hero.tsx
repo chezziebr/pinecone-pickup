@@ -1,5 +1,7 @@
 'use client'
 
+import Image from 'next/image'
+
 export default function Hero() {
   const scrollToBooking = () => {
     const element = document.getElementById('booking')
@@ -36,6 +38,23 @@ export default function Hero() {
         <p className="text-pine-light text-lg md:text-xl mb-8 max-w-2xl mx-auto">
           Hi, we're Bruce, Zoë and Chase — and we love to pick up pinecones! Book us online in minutes.
         </p>
+
+        {/* Kids Photo */}
+        <div className="mb-12">
+          <div className="relative max-w-md mx-auto">
+            <Image
+              src="/images/kids-crew.jpeg"
+              alt="Bruce, Zoë, and Chase with their wheelbarrow full of pinecones"
+              width={400}
+              height={300}
+              className="rounded-2xl shadow-2xl border-4 border-white/20"
+              priority
+            />
+            <div className="absolute -bottom-4 -right-4 bg-orange text-white px-4 py-2 rounded-full text-sm font-medium shadow-lg">
+              The Crew! 🌲
+            </div>
+          </div>
+        </div>
 
         {/* Buttons */}
         <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">

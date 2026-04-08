@@ -9,9 +9,9 @@ export default {
   theme: {
     extend: {
       colors: {
-        pine: '#7B8471',
-        'pine-mid': '#9BA087',
-        'pine-light': '#F5F7F3',
+        pine: '#6B7563',
+        'pine-mid': '#848B78',
+        'pine-light': '#F0F2ED',
         orange: '#D4735B',
         'orange-light': '#F9F1ED',
         cream: '#FDFCFA',
