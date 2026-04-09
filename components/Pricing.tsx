@@ -4,7 +4,7 @@ export default function Pricing() {
       <div className="max-w-6xl mx-auto">
         {/* Section header */}
         <div className="text-center mb-16">
-          <div className="inline-block bg-orange/10 text-orange px-4 py-2 rounded-full text-base font-medium mb-4">
+          <div className="inline-block bg-orange/10 text-orange px-4 py-2 rounded-full text-lg font-medium mb-4">
             Pricing
           </div>
           <h2 className="text-3xl md:text-4xl font-fraunces font-bold text-pine mb-4">
