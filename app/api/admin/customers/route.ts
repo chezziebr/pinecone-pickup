@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verify } from 'jsonwebtoken'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabase'
 
 const JWT_SECRET = process.env.JWT_SECRET || 'pinecone-admin-secret-key'
 
@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch all bookings to aggregate customer data
-    const { data: bookings, error: bookingsError } = await supabase
+    const { data: bookings, error: bookingsError } = await supabaseAdmin
       .from('bookings')
       .select('*')
       .order('created_at', { ascending: false })

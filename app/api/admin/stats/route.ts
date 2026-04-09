@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verify } from 'jsonwebtoken'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabase'
 
 const JWT_SECRET = process.env.JWT_SECRET || 'pinecone-admin-secret-key'
 
@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch all bookings
-    const { data: bookings, error: bookingsError } = await supabase
+    const { data: bookings, error: bookingsError } = await supabaseAdmin
       .from('bookings')
       .select('*')
 
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch all reviews
-    const { data: reviews, error: reviewsError } = await supabase
+    const { data: reviews, error: reviewsError } = await supabaseAdmin
       .from('reviews')
       .select('rating')
 
@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
 
     // Calculate review stats
     const totalReviews = reviews?.length || 0
-    const averageRating = reviews?.length > 0
+    const averageRating = reviews && reviews.length > 0
       ? reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length
       : 0
 

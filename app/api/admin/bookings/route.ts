@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verify } from 'jsonwebtoken'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabase'
 
 const JWT_SECRET = process.env.JWT_SECRET || 'pinecone-admin-secret-key'
 
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     const order = searchParams.get('order') || 'desc'
 
     // Build query
-    let query = supabase
+    let query = supabaseAdmin
       .from('bookings')
       .select(`
         *,
@@ -119,7 +119,7 @@ export async function PATCH(request: NextRequest) {
     if (status) updateData.status = status
     if (notes !== undefined) updateData.notes = notes
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('bookings')
       .update(updateData)
       .eq('id', id)

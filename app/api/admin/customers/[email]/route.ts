@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verify } from 'jsonwebtoken'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabase'
 
 const JWT_SECRET = process.env.JWT_SECRET || 'pinecone-admin-secret-key'
 
@@ -14,7 +14,7 @@ function verifyToken(token: string) {
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { email: string } }
+  { params }: { params: Promise<{ email: string }> }
 ) {
   try {
     // Check authorization
@@ -28,10 +28,11 @@ export async function GET(
       )
     }
 
-    const email = decodeURIComponent(params.email)
+    const resolvedParams = await params
+    const email = decodeURIComponent(resolvedParams.email)
 
     // Fetch all bookings for this customer
-    const { data: bookings, error: bookingsError } = await supabase
+    const { data: bookings, error: bookingsError } = await supabaseAdmin
       .from('bookings')
       .select('*')
       .eq('email', email)
@@ -42,7 +43,7 @@ export async function GET(
     }
 
     // Fetch reviews for this customer
-    const { data: reviews, error: reviewsError } = await supabase
+    const { data: reviews, error: reviewsError } = await supabaseAdmin
       .from('reviews')
       .select('*')
       .in('booking_id', bookings?.map(b => b.id) || [])
