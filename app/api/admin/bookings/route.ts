@@ -1,29 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { verify } from 'jsonwebtoken'
 import { supabaseAdmin } from '@/lib/supabase'
-
-const JWT_SECRET = process.env.JWT_SECRET || 'pinecone-admin-secret-key'
-
-function verifyToken(token: string) {
-  try {
-    return verify(token, JWT_SECRET) as { admin: boolean }
-  } catch {
-    return null
-  }
-}
+import { requireAdminAuth } from '@/lib/auth'
+import { validateAdminBookingUpdate } from '@/lib/validation'
 
 export async function GET(request: NextRequest) {
   try {
-    // Check authorization
-    const authHeader = request.headers.get('Authorization')
-    const token = authHeader?.replace('Bearer ', '')
-
-    if (!token || !verifyToken(token)) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
+    // Check authorization using new secure auth
+    requireAdminAuth(request)
 
     // Get query parameters
     const { searchParams } = new URL(request.url)
@@ -68,7 +51,7 @@ export async function GET(request: NextRequest) {
       scheduled_time: booking.scheduled_time,
       service_type: booking.service_type,
       lot_size: booking.lot_size,
-      amount: parseFloat(booking.amount || 0),
+      amount: parseFloat(booking.price || 0), // Fixed: use price field consistently
       status: booking.status,
       notes: booking.notes,
       reminders_opted_in: booking.reminders_opted_in,
@@ -94,25 +77,24 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    // Check authorization
-    const authHeader = request.headers.get('Authorization')
-    const token = authHeader?.replace('Bearer ', '')
+    // Check authorization using new secure auth
+    requireAdminAuth(request)
 
-    if (!token || !verifyToken(token)) {
+    const body = await request.json()
+
+    // Validate and sanitize input data
+    const validationResult = validateAdminBookingUpdate(body)
+    if (!validationResult.isValid) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
-
-    const { id, status, notes } = await request.json()
-
-    if (!id) {
-      return NextResponse.json(
-        { error: 'Booking ID is required' },
+        {
+          error: 'Validation failed',
+          details: validationResult.errors
+        },
         { status: 400 }
       )
     }
+
+    const { id, status, notes } = validationResult.sanitizedData!
 
     // Update booking
     const updateData: any = {}

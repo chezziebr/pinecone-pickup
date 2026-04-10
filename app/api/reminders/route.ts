@@ -2,13 +2,25 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { sendDayBeforeReminder, sendHourBeforeReminder } from '@/lib/resend'
 
+// Require CRON_SECRET - no fallback for security
+const CRON_SECRET = process.env.CRON_SECRET
+
+if (!CRON_SECRET) {
+  throw new Error('Missing required environment variable: CRON_SECRET must be set')
+}
+
 export async function POST(request: NextRequest) {
   try {
     // Verify cron secret
     const authHeader = request.headers.get('authorization')
-    const expectedAuth = `Bearer ${process.env.CRON_SECRET}`
+    const expectedAuth = `Bearer ${CRON_SECRET}`
 
-    if (authHeader !== expectedAuth) {
+    if (!authHeader || authHeader !== expectedAuth) {
+      console.warn('Unauthorized cron request attempt:', {
+        ip: request.headers.get('x-forwarded-for') || request.ip,
+        userAgent: request.headers.get('user-agent'),
+        timestamp: new Date().toISOString()
+      })
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }

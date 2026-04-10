@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAvailableSlots, getAvailableDates } from '@/lib/google-calendar'
+import { checkRateLimit, RATE_LIMITS, rateLimitResponse } from '@/lib/rate-limit'
 
 export async function GET(request: NextRequest) {
   try {
+    // Apply rate limiting
+    const rateLimitResult = checkRateLimit(request, RATE_LIMITS.AVAILABILITY)
+    if (!rateLimitResult.success) {
+      return rateLimitResponse(rateLimitResult.error!)
+    }
     const { searchParams } = new URL(request.url)
     const date = searchParams.get('date')
     const month = searchParams.get('month')

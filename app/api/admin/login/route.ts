@@ -1,42 +1,135 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { sign } from 'jsonwebtoken'
+import { compare, hash } from 'bcryptjs'
 
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'pinecone2024'
-const JWT_SECRET = process.env.JWT_SECRET || 'pinecone-admin-secret-key'
+// Require environment variables - no fallbacks for security
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD
+const JWT_SECRET = process.env.JWT_SECRET
+
+if (!ADMIN_PASSWORD || !JWT_SECRET) {
+  throw new Error('Missing required environment variables: ADMIN_PASSWORD and JWT_SECRET must be set')
+}
+
+// Rate limiting store (in production, use Redis)
+const loginAttempts = new Map<string, { count: number; lastAttempt: number }>()
+const MAX_ATTEMPTS = 5
+const LOCKOUT_DURATION = 15 * 60 * 1000 // 15 minutes
+
+function getRateLimitKey(request: NextRequest): string {
+  const forwarded = request.headers.get('x-forwarded-for')
+  const ip = forwarded ? forwarded.split(',')[0] : request.ip || 'unknown'
+  return `login_attempts_${ip}`
+}
+
+function isRateLimited(key: string): boolean {
+  const attempts = loginAttempts.get(key)
+  if (!attempts) return false
+
+  const now = Date.now()
+  if (now - attempts.lastAttempt > LOCKOUT_DURATION) {
+    loginAttempts.delete(key)
+    return false
+  }
+
+  return attempts.count >= MAX_ATTEMPTS
+}
+
+function recordLoginAttempt(key: string, success: boolean) {
+  const now = Date.now()
+  const attempts = loginAttempts.get(key) || { count: 0, lastAttempt: now }
+
+  if (success) {
+    loginAttempts.delete(key)
+  } else {
+    attempts.count += 1
+    attempts.lastAttempt = now
+    loginAttempts.set(key, attempts)
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
-    const { password } = await request.json()
+    const rateLimitKey = getRateLimitKey(request)
 
-    if (!password) {
+    // Check rate limiting
+    if (isRateLimited(rateLimitKey)) {
+      return NextResponse.json(
+        { error: 'Too many login attempts. Please try again in 15 minutes.' },
+        { status: 429 }
+      )
+    }
+
+    const body = await request.json()
+    const { password } = body
+
+    // Input validation
+    if (!password || typeof password !== 'string') {
+      recordLoginAttempt(rateLimitKey, false)
       return NextResponse.json(
         { error: 'Password is required' },
         { status: 400 }
       )
     }
 
-    if (password !== ADMIN_PASSWORD) {
+    if (password.length > 128) {
+      recordLoginAttempt(rateLimitKey, false)
       return NextResponse.json(
         { error: 'Invalid password' },
         { status: 401 }
       )
     }
 
-    // Generate JWT token
+    // Verify password (support both plain text for migration and hashed)
+    let isValidPassword = false
+    if (ADMIN_PASSWORD.startsWith('$2b$')) {
+      // Hashed password
+      isValidPassword = await compare(password, ADMIN_PASSWORD)
+    } else {
+      // Plain text password (for migration period)
+      isValidPassword = password === ADMIN_PASSWORD
+    }
+
+    if (!isValidPassword) {
+      recordLoginAttempt(rateLimitKey, false)
+      return NextResponse.json(
+        { error: 'Invalid password' },
+        { status: 401 }
+      )
+    }
+
+    // Successful login
+    recordLoginAttempt(rateLimitKey, true)
+
+    // Generate secure JWT token
     const token = sign(
       {
         admin: true,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        ip: request.headers.get('x-forwarded-for') || request.ip || 'unknown'
       },
       JWT_SECRET,
-      { expiresIn: '24h' }
+      {
+        expiresIn: '8h', // Reduced from 24h for security
+        issuer: 'pinecone-pickup',
+        audience: 'admin-panel'
+      }
     )
 
-    return NextResponse.json({
+    // Set secure cookie (recommended over localStorage)
+    const response = NextResponse.json({
       success: true,
-      token,
       message: 'Login successful'
     })
+
+    response.cookies.set('admin-token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 8 * 60 * 60, // 8 hours
+      path: '/admin'
+    })
+
+    return response
 
   } catch (error) {
     console.error('Admin login error:', error)

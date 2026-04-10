@@ -1,49 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { verify } from 'jsonwebtoken'
 import { supabaseAdmin } from '@/lib/supabase'
-
-const JWT_SECRET = process.env.JWT_SECRET || 'pinecone-admin-secret-key'
-
-function verifyToken(token: string) {
-  try {
-    return verify(token, JWT_SECRET) as { admin: boolean }
-  } catch {
-    return null
-  }
-}
+import { requireAdminAuth } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
   try {
-    // Check authorization
-    const authHeader = request.headers.get('Authorization')
-    const token = authHeader?.replace('Bearer ', '')
+    // Check authorization using new secure auth
+    requireAdminAuth(request)
 
-    if (!token || !verifyToken(token)) {
+    // Fetch all bookings with pagination and limits for security
+    const { data: bookings, error: bookingsError } = await supabaseAdmin
+      .from('bookings')
+      .select('id, status, scheduled_date, created_at, service_type, price')
+      .limit(1000) // Add reasonable limit
+      .order('created_at', { ascending: false })
+
+    if (bookingsError) {
+      console.error('Failed to fetch bookings for stats:', bookingsError)
       return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
+        { error: 'Failed to fetch statistics' },
+        { status: 500 }
       )
     }
 
-    // Fetch all bookings
-    const { data: bookings, error: bookingsError } = await supabaseAdmin
-      .from('bookings')
-      .select('*')
-
-    if (bookingsError) {
-      throw bookingsError
-    }
-
-    // Fetch all reviews
+    // Fetch all reviews with limit
     const { data: reviews, error: reviewsError } = await supabaseAdmin
       .from('reviews')
       .select('rating')
+      .limit(1000)
 
     if (reviewsError) {
       console.error('Reviews error:', reviewsError)
     }
 
-    // Calculate stats
+    // Calculate stats safely
     const now = new Date()
     const thisMonth = now.getMonth()
     const thisYear = now.getFullYear()
@@ -52,10 +41,10 @@ export async function GET(request: NextRequest) {
     const completedJobs = bookings?.filter(b => b.status === 'completed').length || 0
     const pendingJobs = bookings?.filter(b => b.status === 'pending' || b.status === 'confirmed').length || 0
 
-    // Calculate revenue
+    // Calculate revenue using 'price' field (fixed field inconsistency)
     const totalRevenue = bookings?.reduce((sum, booking) => {
-      if (booking.status === 'completed') {
-        return sum + parseFloat(booking.amount || 0)
+      if (booking.status === 'completed' && booking.price) {
+        return sum + parseFloat(booking.price.toString())
       }
       return sum
     }, 0) || 0
@@ -64,8 +53,9 @@ export async function GET(request: NextRequest) {
       const bookingDate = new Date(booking.scheduled_date)
       if (booking.status === 'completed' &&
           bookingDate.getMonth() === thisMonth &&
-          bookingDate.getFullYear() === thisYear) {
-        return sum + parseFloat(booking.amount || 0)
+          bookingDate.getFullYear() === thisYear &&
+          booking.price) {
+        return sum + parseFloat(booking.price.toString())
       }
       return sum
     }, 0) || 0

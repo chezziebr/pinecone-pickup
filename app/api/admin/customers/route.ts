@@ -1,29 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { verify } from 'jsonwebtoken'
 import { supabaseAdmin } from '@/lib/supabase'
-
-const JWT_SECRET = process.env.JWT_SECRET || 'pinecone-admin-secret-key'
-
-function verifyToken(token: string) {
-  try {
-    return verify(token, JWT_SECRET) as { admin: boolean }
-  } catch {
-    return null
-  }
-}
+import { requireAdminAuth } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
   try {
-    // Check authorization
-    const authHeader = request.headers.get('Authorization')
-    const token = authHeader?.replace('Bearer ', '')
-
-    if (!token || !verifyToken(token)) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
+    // Check authorization using new secure auth
+    requireAdminAuth(request)
 
     // Fetch all bookings to aggregate customer data
     const { data: bookings, error: bookingsError } = await supabaseAdmin
@@ -63,7 +45,7 @@ export async function GET(request: NextRequest) {
 
       // Only count completed bookings for revenue
       if (booking.status === 'completed') {
-        customer.totalSpent += parseFloat(booking.amount || 0)
+        customer.totalSpent += parseFloat(booking.price || 0) // Fixed: use price field consistently
       }
 
       // Track service types to determine preference

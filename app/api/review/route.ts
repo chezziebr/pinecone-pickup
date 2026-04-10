@@ -1,28 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
+import { checkRateLimit, RATE_LIMITS, rateLimitResponse } from '@/lib/rate-limit'
+import { validateReviewData } from '@/lib/validation'
 import { v4 as uuidv4 } from 'uuid'
 
 export async function POST(request: NextRequest) {
   try {
+    // Apply rate limiting
+    const rateLimitResult = checkRateLimit(request, RATE_LIMITS.REVIEW)
+    if (!rateLimitResult.success) {
+      return rateLimitResponse(rateLimitResult.error!)
+    }
     const body = await request.json()
 
-    // Validate required fields
-    const { bookingId, rating, comment, neighborhood } = body
-
-    if (!bookingId || !rating) {
+    // Validate and sanitize input data
+    const validationResult = validateReviewData(body)
+    if (!validationResult.isValid) {
       return NextResponse.json(
-        { error: 'bookingId and rating are required' },
+        {
+          error: 'Validation failed',
+          details: validationResult.errors
+        },
         { status: 400 }
       )
     }
 
-    // Validate rating range
-    if (rating < 1 || rating > 5 || !Number.isInteger(rating)) {
-      return NextResponse.json(
-        { error: 'Rating must be an integer between 1 and 5' },
-        { status: 400 }
-      )
-    }
+    const { bookingId, rating, comment, neighborhood } = validationResult.sanitizedData!
 
     // Verify booking exists
     const { data: booking, error: bookingError } = await supabaseAdmin
@@ -35,6 +38,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Booking not found' },
         { status: 404 }
+      )
+    }
+
+    // Check for existing review (prevent duplicates)
+    const { data: existingReview, error: reviewCheckError } = await supabaseAdmin
+      .from('reviews')
+      .select('id')
+      .eq('booking_id', bookingId)
+      .single()
+
+    if (reviewCheckError && reviewCheckError.code !== 'PGRST116') {
+      console.error('Error checking for existing review:', reviewCheckError)
+      return NextResponse.json(
+        { error: 'Failed to verify review status' },
+        { status: 500 }
+      )
+    }
+
+    if (existingReview) {
+      return NextResponse.json(
+        { error: 'A review has already been submitted for this booking' },
+        { status: 409 }
       )
     }
 
