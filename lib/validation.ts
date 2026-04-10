@@ -14,10 +14,10 @@ export interface BookingData {
   reminders_opted_in?: boolean
 }
 
-export interface ValidationResult {
+export interface ValidationResult<T = any> {
   isValid: boolean
   errors: Record<string, string>
-  sanitizedData?: Partial<BookingData>
+  sanitizedData?: Partial<T>
 }
 
 // Validation patterns
@@ -66,7 +66,7 @@ function sanitizeAddress(input: any): string {
 }
 
 // Main validation functions
-export function validateBookingData(data: any): ValidationResult {
+export function validateBookingData(data: any): ValidationResult<BookingData> {
   const errors: Record<string, string> = {}
   const sanitized: Partial<BookingData> = {}
 
@@ -198,9 +198,16 @@ export function validateBookingData(data: any): ValidationResult {
   }
 }
 
-export function validateReviewData(data: any): ValidationResult {
+export interface ReviewData {
+  bookingId: string
+  rating: number
+  comment?: string
+  neighborhood?: string
+}
+
+export function validateReviewData(data: any): ValidationResult<ReviewData> {
   const errors: Record<string, string> = {}
-  const sanitized: any = {}
+  const sanitized: Partial<ReviewData> = {}
 
   // Booking ID validation
   if (!data.bookingId || typeof data.bookingId !== 'string') {
@@ -247,9 +254,15 @@ export function validateReviewData(data: any): ValidationResult {
   }
 }
 
-export function validateAdminBookingUpdate(data: any): ValidationResult {
+export interface AdminBookingUpdate {
+  id: string
+  status?: string
+  notes?: string
+}
+
+export function validateAdminBookingUpdate(data: any): ValidationResult<AdminBookingUpdate> {
   const errors: Record<string, string> = {}
-  const sanitized: any = {}
+  const sanitized: Partial<AdminBookingUpdate> = {}
 
   // ID validation
   if (!data.id || typeof data.id !== 'string') {

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAdminAuth } from '@/lib/auth'
-import { validateAdminBookingUpdate } from '@/lib/validation'
+import { validateAdminBookingUpdate, AdminBookingUpdate } from '@/lib/validation'
 
 export async function GET(request: NextRequest) {
   try {
@@ -94,7 +94,7 @@ export async function PATCH(request: NextRequest) {
       )
     }
 
-    const { id, status, notes } = validationResult.sanitizedData!
+    const { id, status, notes } = validationResult.sanitizedData as AdminBookingUpdate
 
     // Update booking
     const updateData: any = {}

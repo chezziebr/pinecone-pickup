@@ -17,7 +17,7 @@ const LOCKOUT_DURATION = 15 * 60 * 1000 // 15 minutes
 
 function getRateLimitKey(request: NextRequest): string {
   const forwarded = request.headers.get('x-forwarded-for')
-  const ip = forwarded ? forwarded.split(',')[0] : request.ip || 'unknown'
+  const ip = forwarded ? forwarded.split(',')[0] : 'unknown'
   return `login_attempts_${ip}`
 }
 
@@ -81,10 +81,10 @@ export async function POST(request: NextRequest) {
 
     // Verify password (support both plain text for migration and hashed)
     let isValidPassword = false
-    if (ADMIN_PASSWORD.startsWith('$2b$')) {
+    if (ADMIN_PASSWORD && ADMIN_PASSWORD.startsWith('$2b$')) {
       // Hashed password
       isValidPassword = await compare(password, ADMIN_PASSWORD)
-    } else {
+    } else if (ADMIN_PASSWORD) {
       // Plain text password (for migration period)
       isValidPassword = password === ADMIN_PASSWORD
     }
@@ -105,9 +105,9 @@ export async function POST(request: NextRequest) {
       {
         admin: true,
         timestamp: Date.now(),
-        ip: request.headers.get('x-forwarded-for') || request.ip || 'unknown'
+        ip: request.headers.get('x-forwarded-for') || 'unknown'
       },
-      JWT_SECRET,
+      JWT_SECRET!,
       {
         expiresIn: '8h', // Reduced from 24h for security
         issuer: 'pinecone-pickup',

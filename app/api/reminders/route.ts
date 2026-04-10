@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
 
     if (!authHeader || authHeader !== expectedAuth) {
       console.warn('Unauthorized cron request attempt:', {
-        ip: request.headers.get('x-forwarded-for') || request.ip,
+        ip: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent'),
         timestamp: new Date().toISOString()
       })

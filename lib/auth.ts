@@ -30,7 +30,7 @@ export function verifyAdminToken(request: NextRequest): AdminTokenPayload | null
       return null
     }
 
-    const payload = verify(token, JWT_SECRET, {
+    const payload = verify(token, JWT_SECRET!, {
       issuer: 'pinecone-pickup',
       audience: 'admin-panel'
     }) as AdminTokenPayload

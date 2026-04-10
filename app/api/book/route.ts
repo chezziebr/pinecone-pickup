@@ -86,19 +86,19 @@ export async function POST(request: NextRequest) {
     const bookingId = uuidv4()
     const bookingData = {
       id: bookingId,
-      first_name: sanitizedData.first_name,
-      last_name: sanitizedData.last_name,
-      email: sanitizedData.email,
-      phone: sanitizedData.phone,
-      address: sanitizedData.address,
-      lot_size: sanitizedData.lot_size,
-      service_type: sanitizedData.service_type,
+      first_name: sanitizedData.first_name!,
+      last_name: sanitizedData.last_name!,
+      email: sanitizedData.email!,
+      phone: sanitizedData.phone!,
+      address: sanitizedData.address!,
+      lot_size: sanitizedData.lot_size!,
+      service_type: sanitizedData.service_type! as 'pickup_only' | 'pickup_haul',
       price: totalPrice,
-      scheduled_date: sanitizedData.scheduled_date,
-      scheduled_time: sanitizedData.scheduled_time,
+      scheduled_date: sanitizedData.scheduled_date!,
+      scheduled_time: sanitizedData.scheduled_time!,
       notes: sanitizedData.notes || null,
       reminders_opted_in: sanitizedData.reminders_opted_in ?? true,
-      status: 'confirmed',
+      status: 'confirmed' as const,
       created_at: new Date().toISOString(),
       reminder_day_before_sent: false,
       reminder_hour_before_sent: false,
@@ -155,7 +155,7 @@ export async function POST(request: NextRequest) {
       timestamp: new Date().toISOString(),
       error: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : undefined,
-      ip: request.headers.get('x-forwarded-for') || request.ip,
+      ip: request.headers.get('x-forwarded-for') || 'unknown',
       userAgent: request.headers.get('user-agent')
     })
 

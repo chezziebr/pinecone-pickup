@@ -32,7 +32,7 @@ function getRateLimitKey(request: NextRequest, identifier?: string): string {
   // Get IP address from various headers
   const forwarded = request.headers.get('x-forwarded-for')
   const realIp = request.headers.get('x-real-ip')
-  const ip = forwarded ? forwarded.split(',')[0].trim() : realIp || request.ip || 'unknown'
+  const ip = forwarded ? forwarded.split(',')[0].trim() : realIp || 'unknown'
 
   return `rate_limit_${ip}_${request.url}`
 }

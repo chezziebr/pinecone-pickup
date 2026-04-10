@@ -10,7 +10,7 @@ export type BookingData = {
   price: number
   scheduled_date: string
   scheduled_time: string
-  notes?: string
+  notes?: string | null
   reminders_opted_in: boolean
   google_event_id?: string | null
 }

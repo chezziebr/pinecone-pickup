@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { checkRateLimit, RATE_LIMITS, rateLimitResponse } from '@/lib/rate-limit'
-import { validateReviewData } from '@/lib/validation'
+import { validateReviewData, ReviewData } from '@/lib/validation'
 import { v4 as uuidv4 } from 'uuid'
 
 export async function POST(request: NextRequest) {
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { bookingId, rating, comment, neighborhood } = validationResult.sanitizedData!
+    const { bookingId, rating, comment, neighborhood } = validationResult.sanitizedData as ReviewData
 
     // Verify booking exists
     const { data: booking, error: bookingError } = await supabaseAdmin
