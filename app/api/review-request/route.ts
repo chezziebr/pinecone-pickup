@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
-import { sendReviewRequest } from '@/lib/resend'
+import { sendReviewRequest } from '@/lib/sendgrid'
 
 // Require CRON_SECRET - no fallback for security
 const CRON_SECRET = process.env.CRON_SECRET

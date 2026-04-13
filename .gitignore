@@ -32,6 +32,49 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# security & credentials
+*.key
+*.p12
+*.pfx
+*.pem
+*credentials*.json
+*config*.json
+secrets.json
+.secrets
+.credentials
+service-account*.json
+google-credentials*.json
+
+# database
+*.db
+*.sqlite
+*.sqlite3
+
+# logs
+*.log
+logs/
+.logs/
+
+# IDEs and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
 
 # vercel
 .vercel
@@ -39,3 +82,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# temporary files
+.tmp/
+temp/
+.temp/

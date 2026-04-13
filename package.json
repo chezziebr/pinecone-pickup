@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@react-email/components": "^1.0.11",
+    "@sendgrid/mail": "^8.1.6",
     "@supabase/supabase-js": "^2.102.1",
     "@types/bcryptjs": "^2.4.6",
     "@types/jsonwebtoken": "^9.0.10",

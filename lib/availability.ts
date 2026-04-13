@@ -15,28 +15,8 @@ export type BookingData = {
   google_event_id?: string | null
 }
 
-// Business logic validation functions
-export function validateBusinessHours(date: string, time: string): boolean {
-  const scheduleDate = new Date(date)
-  const dayOfWeek = scheduleDate.getDay() // 0 = Sunday, 6 = Saturday
-
-  // Parse time
-  const [timeStr, period] = time.split(' ')
-  const [hours, minutes] = timeStr.split(':').map(Number)
-  let hour24 = hours
-  if (period === 'PM' && hours !== 12) hour24 += 12
-  if (period === 'AM' && hours === 12) hour24 = 0
-
-  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6
-
-  if (isWeekend) {
-    // Weekends: 9 AM - 4 PM
-    return hour24 >= 9 && hour24 <= 16
-  } else {
-    // Weekdays: 3 PM - 5 PM
-    return hour24 >= 15 && hour24 <= 17
-  }
-}
+// Use the enhanced business hours validation from availability engine
+export { validateBusinessHoursDatabase as validateBusinessHours } from './availability-engine'
 
 export function validateFutureDate(date: string): boolean {
   const scheduleDate = new Date(date)

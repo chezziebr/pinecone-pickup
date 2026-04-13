@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import AvailabilitySettings from '@/components/admin/AvailabilitySettings'
 
 interface DashboardStats {
   totalBookings: number
@@ -369,16 +370,7 @@ export default function AdminDashboard() {
             )}
 
             {activeTab === 'schedule' && (
-              <div>
-                <h3 className="text-lg font-medium text-gray-900 mb-4">
-                  Schedule Management
-                </h3>
-                <div className="text-center py-12 text-gray-500">
-                  <div className="text-4xl mb-4">🗓️</div>
-                  <p>Schedule management tools coming soon!</p>
-                  <p className="text-sm mt-2">This will include calendar views, availability management, and time blocking.</p>
-                </div>
-              </div>
+              <AvailabilitySettings token={localStorage.getItem('adminToken') || ''} />
             )}
           </div>
         </div>

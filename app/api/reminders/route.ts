@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
-import { sendDayBeforeReminder, sendHourBeforeReminder } from '@/lib/resend'
+import { sendDayBeforeReminder, sendHourBeforeReminder } from '@/lib/sendgrid'
 
 // Require CRON_SECRET - no fallback for security
 const CRON_SECRET = process.env.CRON_SECRET

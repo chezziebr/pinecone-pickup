@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { getAvailableSlots, createBookingEvent } from '@/lib/google-calendar'
-import { sendConfirmationEmail } from '@/lib/resend'
+import { sendConfirmationEmail } from '@/lib/sendgrid'
 import { checkRateLimit, RATE_LIMITS, rateLimitResponse } from '@/lib/rate-limit'
 import { validateBookingData } from '@/lib/validation'
 import { validateBusinessHours, validateFutureDate, validateReasonableAdvanceBooking, isValidServiceForDate } from '@/lib/availability'
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (!validateBusinessHours(sanitizedData.scheduled_date!, sanitizedData.scheduled_time!)) {
+    if (!(await validateBusinessHours(sanitizedData.scheduled_date!, sanitizedData.scheduled_time!))) {
       return NextResponse.json(
         { error: 'Selected time is outside business hours' },
         { status: 400 }

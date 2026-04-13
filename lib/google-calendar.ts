@@ -51,66 +51,14 @@ function hasTimeConflict(slotTime: Date, events: any[]): boolean {
   })
 }
 
-export async function getAvailableSlots(date: string): Promise<string[]> {
-  try {
-    // Create OAuth clients for both calendars
-    const personalAuth = createOAuthClient(process.env.PERSONAL_GOOGLE_REFRESH_TOKEN!)
-    const pineconeAuth = createOAuthClient(process.env.PINECONE_GOOGLE_REFRESH_TOKEN!)
-
-    const calendar = google.calendar({ version: 'v3' })
-
-    // Get events from both calendars for the specified date
-    const startOfDay = new Date(date + 'T00:00:00')
-    const endOfDay = new Date(date + 'T23:59:59')
-
-    const [personalEvents, pineconeEvents] = await Promise.all([
-      calendar.events.list({
-        auth: personalAuth,
-        calendarId: process.env.PERSONAL_CALENDAR_IDS!, // Can handle multiple calendars if needed
-        timeMin: startOfDay.toISOString(),
-        timeMax: endOfDay.toISOString(),
-        singleEvents: true,
-        orderBy: 'startTime',
-      }),
-      calendar.events.list({
-        auth: pineconeAuth,
-        calendarId: process.env.PINECONE_CALENDAR_ID!,
-        timeMin: startOfDay.toISOString(),
-        timeMax: endOfDay.toISOString(),
-        singleEvents: true,
-        orderBy: 'startTime',
-      })
-    ])
-
-    // Combine events from both calendars
-    const allEvents = [
-      ...(personalEvents.data.items || []),
-      ...(pineconeEvents.data.items || [])
-    ]
-
-    // Determine available slots based on day of week
-    const dayOfWeek = new Date(date).getDay()
-    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6 // Sunday or Saturday
-
-    const defaultSlots = isWeekend
-      ? ['9:00 AM', '10:00 AM', '11:00 AM', '1:00 PM', '2:00 PM', '3:00 PM', '4:00 PM']
-      : ['3:00 PM', '4:00 PM', '5:00 PM']
-
-    // Filter out slots that conflict with existing events
-    const availableSlots = defaultSlots.filter(slotTime => {
-      const slotDate = parseTimeToDate(date, slotTime)
-      return !hasTimeConflict(slotDate, allEvents)
-    })
-
-    return availableSlots
-  } catch (error) {
-    console.error('Error getting available slots:', error)
-    return []
-  }
-}
+// Use the enhanced availability engine instead of hardcoded logic
+export { getAvailableSlots } from './availability-engine'
 
 export async function getAvailableDates(year: number, month: number): Promise<string[]> {
   try {
+    // Import the function locally to avoid circular dependency issues
+    const { getAvailableSlots: getSlots } = await import('./availability-engine')
+
     const availableDates: string[] = []
     const daysInMonth = new Date(year, month, 0).getDate()
     const today = new Date()
@@ -128,7 +76,7 @@ export async function getAvailableDates(year: number, month: number): Promise<st
 
       // Only check weekends or weekdays after 2:30 PM
       if (isWeekend || (!isWeekend && dayOfWeek !== 0)) {
-        const slots = await getAvailableSlots(dateString)
+        const slots = await getSlots(dateString)
         if (slots.length > 0) {
           availableDates.push(dateString)
         }
