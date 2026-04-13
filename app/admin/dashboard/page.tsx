@@ -49,9 +49,11 @@ export default function AdminDashboard() {
 
       const [statsResponse, bookingsResponse] = await Promise.all([
         fetch('/api/admin/stats', {
+          credentials: 'include',
           headers: { 'Authorization': `Bearer ${token}` }
         }),
         fetch('/api/admin/bookings?limit=5', {
+          credentials: 'include',
           headers: { 'Authorization': `Bearer ${token}` }
         })
       ])

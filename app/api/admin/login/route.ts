@@ -115,10 +115,12 @@ export async function POST(request: NextRequest) {
       }
     )
 
-    // Set secure cookie (recommended over localStorage)
+    // Return token in response body for Authorization header usage
+    // Also set cookie as backup with path '/' to cover API routes
     const response = NextResponse.json({
       success: true,
-      message: 'Login successful'
+      message: 'Login successful',
+      token: token
     })
 
     response.cookies.set('admin-token', token, {
@@ -126,7 +128,7 @@ export async function POST(request: NextRequest) {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
       maxAge: 8 * 60 * 60, // 8 hours
-      path: '/admin'
+      path: '/'
     })
 
     return response

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
-import { verifyAdminAuth } from '@/lib/admin-auth'
+import { requireAdminAuth } from '@/lib/auth'
 import { UpdateAvailabilitySettingRequest } from '@/lib/types'
 
 export async function PUT(
@@ -11,10 +11,7 @@ export async function PUT(
     const resolvedParams = await params
 
     // Verify admin authentication
-    const authResult = await verifyAdminAuth(request)
-    if (!authResult.success) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    requireAdminAuth(request)
 
     const body: UpdateAvailabilitySettingRequest = await request.json()
     const { id } = resolvedParams
