@@ -33,10 +33,18 @@ export default function AvailabilitySettings({ token }: AvailabilitySettingsProp
 
       const [settingsResponse, exceptionsResponse] = await Promise.all([
         fetch('/api/admin/availability-settings', {
-          headers: { 'Authorization': `Bearer ${token}` }
+          credentials: 'include',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
         }),
         fetch('/api/admin/availability-exceptions', {
-          headers: { 'Authorization': `Bearer ${token}` }
+          credentials: 'include',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
         })
       ])
 
@@ -62,7 +70,11 @@ export default function AvailabilitySettings({ token }: AvailabilitySettingsProp
     try {
       const response = await fetch(`/api/admin/availability-settings?id=${id}`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
+        credentials: 'include',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
       })
 
       if (response.ok) {
@@ -82,7 +94,11 @@ export default function AvailabilitySettings({ token }: AvailabilitySettingsProp
     try {
       const response = await fetch(`/api/admin/availability-exceptions?id=${id}`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
+        credentials: 'include',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
       })
 
       if (response.ok) {
@@ -378,37 +394,63 @@ function AddSettingModal({
   onSuccess: () => void
 }) {
   const [formData, setFormData] = useState({
-    day_of_week: 1, // Default to Monday
     start_time: '09:00',
     end_time: '15:00',
     is_available: false, // Default to blocked (like school hours)
     description: ''
   })
+  const [selectedDays, setSelectedDays] = useState<number[]>([1]) // Default to Monday
   const [submitting, setSubmitting] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (selectedDays.length === 0) {
+      alert('Please select at least one day')
+      return
+    }
+
     setSubmitting(true)
 
     try {
-      const response = await fetch('/api/admin/availability-settings', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(formData)
-      })
+      // Create settings for each selected day
+      const promises = selectedDays.map(day_of_week =>
+        fetch('/api/admin/availability-settings', {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            ...formData,
+            day_of_week
+          })
+        })
+      )
 
-      if (response.ok) {
+      const responses = await Promise.all(promises)
+
+      // Check if all requests succeeded
+      const errors = []
+      for (let i = 0; i < responses.length; i++) {
+        if (!responses[i].ok) {
+          const error = await responses[i].json()
+          const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][selectedDays[i]]
+          errors.push(`${dayName}: ${error.error}`)
+        }
+      }
+
+      if (errors.length === 0) {
         onSuccess()
       } else {
-        const error = await response.json()
-        alert(`Failed to create setting: ${error.error}`)
+        alert(`Failed to create some settings:\n${errors.join('\n')}`)
+        // Still call onSuccess to refresh the data in case some succeeded
+        onSuccess()
       }
     } catch (error) {
-      console.error('Error creating setting:', error)
-      alert('Failed to create setting')
+      console.error('Error creating settings:', error)
+      alert('Failed to create settings')
     } finally {
       setSubmitting(false)
     }
@@ -430,13 +472,40 @@ function AddSettingModal({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Day of Week
+              Days of Week
             </label>
-            <select
-              value={formData.day_of_week}
-              onChange={e => setFormData(prev => ({ ...prev, day_of_week: parseInt(e.target.value) }))}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange focus:border-transparent"
-            >
+            <p className="text-xs text-gray-500 mb-2">Select multiple days to apply the same time block</p>
+            <div className="flex space-x-2 mb-3">
+              <button
+                type="button"
+                onClick={() => setSelectedDays([1, 2, 3, 4, 5])}
+                className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+              >
+                Weekdays
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedDays([0, 6])}
+                className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors"
+              >
+                Weekends
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedDays([0, 1, 2, 3, 4, 5, 6])}
+                className="px-2 py-1 text-xs bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors"
+              >
+                All Days
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedDays([])}
+                className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
+              >
+                Clear
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
               {[
                 { value: 0, label: 'Sunday' },
                 { value: 1, label: 'Monday' },
@@ -446,11 +515,26 @@ function AddSettingModal({
                 { value: 5, label: 'Friday' },
                 { value: 6, label: 'Saturday' }
               ].map(day => (
-                <option key={day.value} value={day.value}>
-                  {day.label}
-                </option>
+                <label key={day.value} className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={selectedDays.includes(day.value)}
+                    onChange={e => {
+                      if (e.target.checked) {
+                        setSelectedDays(prev => [...prev, day.value])
+                      } else {
+                        setSelectedDays(prev => prev.filter(d => d !== day.value))
+                      }
+                    }}
+                    className="mr-2"
+                  />
+                  <span className="text-sm">{day.label}</span>
+                </label>
               ))}
-            </select>
+            </div>
+            {selectedDays.length === 0 && (
+              <p className="text-red-500 text-xs mt-1">Please select at least one day</p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -583,6 +667,7 @@ function AddExceptionModal({
 
       const response = await fetch('/api/admin/availability-exceptions', {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`

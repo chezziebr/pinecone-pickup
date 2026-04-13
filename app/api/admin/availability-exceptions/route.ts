@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
-import { verifyAdminAuth } from '@/lib/admin-auth'
+import { requireAdminAuth } from '@/lib/auth'
 import {
   AvailabilityException,
   CreateAvailabilityExceptionRequest,
@@ -8,11 +8,8 @@ import {
 
 export async function GET(request: NextRequest) {
   try {
-    // Verify admin authentication
-    const authResult = await verifyAdminAuth(request)
-    if (!authResult.success) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    // Check authorization using secure auth
+    requireAdminAuth(request)
 
     const { searchParams } = new URL(request.url)
     const fromDate = searchParams.get('from')
@@ -53,11 +50,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    // Verify admin authentication
-    const authResult = await verifyAdminAuth(request)
-    if (!authResult.success) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    // Check authorization using secure auth
+    requireAdminAuth(request)
 
     const body: CreateAvailabilityExceptionRequest = await request.json()
 
@@ -143,11 +137,8 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    // Verify admin authentication
-    const authResult = await verifyAdminAuth(request)
-    if (!authResult.success) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    // Check authorization using secure auth
+    requireAdminAuth(request)
 
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
