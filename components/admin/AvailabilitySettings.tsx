@@ -18,16 +18,74 @@ interface AvailabilitySettingsProps {
 export default function AvailabilitySettings({ token }: AvailabilitySettingsProps) {
   const [settings, setSettings] = useState<AvailabilitySetting[]>([])
   const [exceptions, setExceptions] = useState<AvailabilityException[]>([])
+  const [seasonalHours, setSeasonalHours] = useState<any[]>([])
+  const [bufferMinutes, setBufferMinutes] = useState(0)
   const [loading, setLoading] = useState(true)
   const [activeSubTab, setActiveSubTab] = useState('weekly')
   const [showAddSettingModal, setShowAddSettingModal] = useState(false)
   const [showAddExceptionModal, setShowAddExceptionModal] = useState(false)
+  const [showAddSeasonModal, setShowAddSeasonModal] = useState(false)
   const [editingSetting, setEditingSetting] = useState<AvailabilitySetting | null>(null)
   const [editingException, setEditingException] = useState<AvailabilityException | null>(null)
+  const [editingSeasonalHour, setEditingSeasonalHour] = useState<any | null>(null)
+  const [bufferSaving, setBufferSaving] = useState(false)
 
   useEffect(() => {
     fetchData()
   }, [token])
+
+  const fetchSeasonalHours = async () => {
+    try {
+      const response = await fetch('/api/admin/seasonal-hours', {
+        credentials: 'include',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (response.status === 401) {
+        localStorage.removeItem('adminToken')
+        window.location.href = '/admin'
+        return
+      }
+
+      if (response.ok) {
+        const data = await response.json()
+        setSeasonalHours(data.hours || [])
+      }
+    } catch (error) {
+      console.error('Error fetching seasonal hours:', error)
+    }
+  }
+
+  const fetchBusinessSettings = async () => {
+    try {
+      const response = await fetch('/api/admin/business-settings', {
+        credentials: 'include',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (response.status === 401) {
+        localStorage.removeItem('adminToken')
+        window.location.href = '/admin'
+        return
+      }
+
+      if (response.ok) {
+        const data = await response.json()
+        const bufferSetting = data.settings.find((s: any) => s.key === 'calendar_buffer_minutes')
+        if (bufferSetting) {
+          setBufferMinutes(parseInt(bufferSetting.value) || 0)
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching business settings:', error)
+    }
+  }
 
   const fetchData = async () => {
     try {
@@ -66,6 +124,11 @@ export default function AvailabilitySettings({ token }: AvailabilitySettingsProp
         const exceptionsData = await exceptionsResponse.json()
         setExceptions(exceptionsData.exceptions)
       }
+
+      await Promise.all([
+        fetchSeasonalHours(),
+        fetchBusinessSettings()
+      ])
     } catch (error) {
       console.error('Error fetching availability data:', error)
     } finally {
@@ -121,6 +184,71 @@ export default function AvailabilitySettings({ token }: AvailabilitySettingsProp
     }
   }
 
+  const deleteSeasonalHour = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this seasonal hour entry?')) return
+
+    try {
+      const response = await fetch(`/api/admin/seasonal-hours?id=${id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (response.ok) {
+        setSeasonalHours(prev => prev.filter(s => s.id !== id))
+      } else {
+        alert('Failed to delete seasonal hour')
+      }
+    } catch (error) {
+      console.error('Error deleting seasonal hour:', error)
+      alert('Failed to delete seasonal hour')
+    }
+  }
+
+  const saveBufferMinutes = async () => {
+    if (bufferMinutes < 0 || bufferMinutes > 120) {
+      alert('Buffer time must be between 0 and 120 minutes')
+      return
+    }
+
+    setBufferSaving(true)
+
+    try {
+      const response = await fetch('/api/admin/business-settings', {
+        method: 'PUT',
+        credentials: 'include',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          key: 'calendar_buffer_minutes',
+          value: bufferMinutes.toString()
+        })
+      })
+
+      if (response.status === 401) {
+        localStorage.removeItem('adminToken')
+        window.location.href = '/admin'
+        return
+      }
+
+      if (response.ok) {
+        alert('Buffer time saved successfully')
+      } else {
+        alert('Failed to save buffer time')
+      }
+    } catch (error) {
+      console.error('Error saving buffer time:', error)
+      alert('Failed to save buffer time')
+    } finally {
+      setBufferSaving(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center py-12">
@@ -145,7 +273,9 @@ export default function AvailabilitySettings({ token }: AvailabilitySettingsProp
         <nav className="flex space-x-8">
           {[
             { id: 'weekly', label: 'Weekly Schedule', icon: '📅' },
-            { id: 'exceptions', label: 'Special Dates', icon: '🚫' }
+            { id: 'exceptions', label: 'Special Dates', icon: '🚫' },
+            { id: 'seasonal', label: 'Seasonal Hours', icon: '🌲' },
+            { id: 'settings', label: 'Settings', icon: '⚙️' }
           ].map((tab) => (
             <button
               key={tab.id}
@@ -201,6 +331,67 @@ export default function AvailabilitySettings({ token }: AvailabilitySettingsProp
         </div>
       )}
 
+      {/* Seasonal Hours Tab */}
+      {activeSubTab === 'seasonal' && (
+        <div>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+            <p className="text-sm text-blue-800">
+              Seasonal hours define your base operating hours. These are the hours customers can book during the specified date range.
+            </p>
+          </div>
+          <div className="flex justify-between items-center mb-4">
+            <p className="text-sm text-gray-600">
+              Set different operating hours for different seasons or time periods.
+            </p>
+            <button
+              onClick={() => setShowAddSeasonModal(true)}
+              className="bg-orange hover:bg-orange/90 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            >
+              + Add Season
+            </button>
+          </div>
+
+          <SeasonalHoursView seasonalHours={seasonalHours} onDelete={deleteSeasonalHour} onEdit={setEditingSeasonalHour} />
+        </div>
+      )}
+
+      {/* Settings Tab */}
+      {activeSubTab === 'settings' && (
+        <div>
+          <div className="space-y-6">
+            <div className="bg-white border border-gray-200 rounded-lg p-6">
+              <h4 className="text-lg font-medium text-gray-900 mb-2">Google Calendar Buffer Time</h4>
+              <p className="text-sm text-gray-600 mb-4">
+                Buffer time is added before and after each Google Calendar event. This prevents bookings from being scheduled too close to your other commitments.
+              </p>
+              <div className="flex items-end space-x-4">
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Buffer Time (minutes)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="120"
+                    value={bufferMinutes}
+                    onChange={e => setBufferMinutes(Math.max(0, Math.min(120, parseInt(e.target.value) || 0)))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange focus:border-transparent"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Recommended: 15 minutes</p>
+                </div>
+                <button
+                  onClick={saveBufferMinutes}
+                  disabled={bufferSaving}
+                  className="bg-orange hover:bg-orange/90 text-white px-6 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                >
+                  {bufferSaving ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modals */}
       {showAddSettingModal && (
         <AddSettingModal
@@ -244,6 +435,29 @@ export default function AvailabilitySettings({ token }: AvailabilitySettingsProp
           onSuccess={() => {
             setEditingException(null)
             fetchData()
+          }}
+        />
+      )}
+
+      {showAddSeasonModal && (
+        <AddSeasonModal
+          token={token}
+          onClose={() => setShowAddSeasonModal(false)}
+          onSuccess={() => {
+            setShowAddSeasonModal(false)
+            fetchSeasonalHours()
+          }}
+        />
+      )}
+
+      {editingSeasonalHour && (
+        <EditSeasonModal
+          token={token}
+          seasonalHour={editingSeasonalHour}
+          onClose={() => setEditingSeasonalHour(null)}
+          onSuccess={() => {
+            setEditingSeasonalHour(null)
+            fetchSeasonalHours()
           }}
         />
       )}
@@ -430,6 +644,104 @@ function SpecialDatesView({
           </div>
         </div>
       ))}
+    </div>
+  )
+}
+
+// Seasonal Hours View Component
+function SeasonalHoursView({
+  seasonalHours,
+  onDelete,
+  onEdit
+}: {
+  seasonalHours: any[]
+  onDelete: (id: string) => void
+  onEdit: (hour: any) => void
+}) {
+  const groupedByName = seasonalHours.reduce((acc, hour) => {
+    if (!acc[hour.name]) {
+      acc[hour.name] = []
+    }
+    acc[hour.name].push(hour)
+    return acc
+  }, {} as Record<string, any[]>)
+
+  if (!seasonalHours.length) {
+    return (
+      <div className="text-center py-8 text-gray-500">
+        <div className="text-4xl mb-4">🌲</div>
+        <p>No seasonal hours configured</p>
+        <p className="text-sm mt-2">Add seasonal schedules to define operating hours for different time periods.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      {(Object.entries(groupedByName) as [string, any[]][]).map(([name, hours]) => {
+        const firstHour = hours[0]
+        const hoursByDay = hours.reduce((acc: Record<number, any>, hour: any) => {
+          acc[hour.day_of_week] = hour
+          return acc
+        }, {} as Record<number, any>)
+
+        return (
+          <div key={name} className="bg-white border border-gray-200 rounded-lg p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h4 className="font-medium text-gray-900">{name}</h4>
+                <p className="text-sm text-gray-600">
+                  {firstHour.start_date} to {firstHour.end_date}
+                </p>
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className={`px-2 py-1 rounded text-xs font-medium ${
+                  firstHour.is_active
+                    ? 'bg-green-100 text-green-800'
+                    : 'bg-gray-100 text-gray-800'
+                }`}>
+                  {firstHour.is_active ? 'Active' : 'Inactive'}
+                </span>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto mb-3">
+              <table className="w-full text-sm">
+                <tbody>
+                  {[0, 1, 2, 3, 4, 5, 6].map(dayNum => {
+                    const hour = hoursByDay[dayNum]
+                    return (
+                      <tr key={dayNum} className="border-t border-gray-100">
+                        <td className="py-2 px-2 text-gray-700 font-medium w-24">{getDayName(dayNum)}</td>
+                        <td className="py-2 px-2 text-gray-600">
+                          {hour ? `${convertTo12Hour(hour.start_time)} - ${convertTo12Hour(hour.end_time)}` : '-'}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex justify-end space-x-2">
+              <button
+                onClick={() => onEdit(firstHour)}
+                className="text-blue-600 hover:text-blue-800 text-sm px-3 py-1"
+                title="Edit"
+              >
+                ✏️ Edit
+              </button>
+              <button
+                onClick={() => onDelete(firstHour.id)}
+                className="text-red-600 hover:text-red-800 text-sm px-3 py-1"
+                title="Delete"
+              >
+                🗑️ Delete
+              </button>
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -1289,6 +1601,482 @@ function EditExceptionModal({
               placeholder="e.g., Christmas holiday, Vacation, etc."
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange focus:border-transparent"
             />
+          </div>
+
+          <div className="flex space-x-3 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="flex-1 px-4 py-2 bg-orange hover:bg-orange/90 text-white rounded-lg transition-colors disabled:opacity-50"
+            >
+              {submitting ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+// Add Season Modal Component
+function AddSeasonModal({
+  token,
+  onClose,
+  onSuccess
+}: {
+  token: string
+  onClose: () => void
+  onSuccess: () => void
+}) {
+  const [formData, setFormData] = useState({
+    name: '',
+    start_date: '',
+    end_date: '',
+    start_time: '09:00',
+    end_time: '17:00',
+    is_active: true
+  })
+  const [selectedDays, setSelectedDays] = useState<number[]>([1, 2, 3, 4, 5]) // Default to weekdays
+  const [submitting, setSubmitting] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (!formData.name.trim()) {
+      alert('Please enter a season name')
+      return
+    }
+
+    if (!formData.start_date || !formData.end_date) {
+      alert('Please select start and end dates')
+      return
+    }
+
+    if (selectedDays.length === 0) {
+      alert('Please select at least one day')
+      return
+    }
+
+    setSubmitting(true)
+
+    try {
+      const promises = selectedDays.map(day_of_week =>
+        fetch('/api/admin/seasonal-hours', {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            name: formData.name,
+            start_date: formData.start_date,
+            end_date: formData.end_date,
+            day_of_week,
+            start_time: `${formData.start_time}:00`,
+            end_time: `${formData.end_time}:00`,
+            is_active: formData.is_active
+          })
+        })
+      )
+
+      const responses = await Promise.all(promises)
+
+      const errors = []
+      for (let i = 0; i < responses.length; i++) {
+        if (!responses[i].ok) {
+          const error = await responses[i].json()
+          const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][selectedDays[i]]
+          errors.push(`${dayName}: ${error.error}`)
+        }
+      }
+
+      if (errors.length === 0) {
+        onSuccess()
+      } else {
+        alert(`Failed to create some seasonal hours:\n${errors.join('\n')}`)
+        onSuccess()
+      }
+    } catch (error) {
+      console.error('Error creating seasonal hours:', error)
+      alert('Failed to create seasonal hours')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-screen overflow-y-auto">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-medium">Add Season</h3>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            ✕
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Season Name
+            </label>
+            <input
+              type="text"
+              value={formData.name}
+              onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
+              placeholder="e.g., Summer Hours, Winter Hours"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange focus:border-transparent"
+              required
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Start Date
+              </label>
+              <input
+                type="date"
+                value={formData.start_date}
+                onChange={e => setFormData(prev => ({ ...prev, start_date: e.target.value }))}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange focus:border-transparent"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                End Date
+              </label>
+              <input
+                type="date"
+                value={formData.end_date}
+                onChange={e => setFormData(prev => ({ ...prev, end_date: e.target.value }))}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange focus:border-transparent"
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Days of Week
+            </label>
+            <p className="text-xs text-gray-500 mb-2">Select which days apply to this season</p>
+            <div className="flex space-x-2 mb-3">
+              <button
+                type="button"
+                onClick={() => setSelectedDays([1, 2, 3, 4, 5])}
+                className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+              >
+                Weekdays
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedDays([0, 6])}
+                className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors"
+              >
+                Weekends
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedDays([0, 1, 2, 3, 4, 5, 6])}
+                className="px-2 py-1 text-xs bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors"
+              >
+                All Days
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedDays([])}
+                className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
+              >
+                Clear
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { value: 0, label: 'Sunday' },
+                { value: 1, label: 'Monday' },
+                { value: 2, label: 'Tuesday' },
+                { value: 3, label: 'Wednesday' },
+                { value: 4, label: 'Thursday' },
+                { value: 5, label: 'Friday' },
+                { value: 6, label: 'Saturday' }
+              ].map(day => (
+                <label key={day.value} className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={selectedDays.includes(day.value)}
+                    onChange={e => {
+                      if (e.target.checked) {
+                        setSelectedDays(prev => [...prev, day.value].sort())
+                      } else {
+                        setSelectedDays(prev => prev.filter(d => d !== day.value))
+                      }
+                    }}
+                    className="mr-2"
+                  />
+                  <span className="text-sm">{day.label}</span>
+                </label>
+              ))}
+            </div>
+            {selectedDays.length === 0 && (
+              <p className="text-red-500 text-xs mt-1">Please select at least one day</p>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Start Time
+              </label>
+              <input
+                type="time"
+                value={formData.start_time}
+                onChange={e => setFormData(prev => ({ ...prev, start_time: e.target.value }))}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange focus:border-transparent"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                End Time
+              </label>
+              <input
+                type="time"
+                value={formData.end_time}
+                onChange={e => setFormData(prev => ({ ...prev, end_time: e.target.value }))}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange focus:border-transparent"
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="flex items-center">
+              <input
+                type="checkbox"
+                checked={formData.is_active}
+                onChange={e => setFormData(prev => ({ ...prev, is_active: e.target.checked }))}
+                className="mr-2"
+              />
+              <span className="text-sm text-gray-700">Active</span>
+            </label>
+          </div>
+
+          <div className="flex space-x-3 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="flex-1 px-4 py-2 bg-orange hover:bg-orange/90 text-white rounded-lg transition-colors disabled:opacity-50"
+            >
+              {submitting ? 'Creating...' : 'Create'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+// Edit Season Modal Component
+function EditSeasonModal({
+  token,
+  seasonalHour,
+  onClose,
+  onSuccess
+}: {
+  token: string
+  seasonalHour: any
+  onClose: () => void
+  onSuccess: () => void
+}) {
+  const toHHMM = (time: string) => time.slice(0, 5)
+
+  const [formData, setFormData] = useState({
+    name: seasonalHour.name,
+    start_date: seasonalHour.start_date,
+    end_date: seasonalHour.end_date,
+    day_of_week: seasonalHour.day_of_week,
+    start_time: toHHMM(seasonalHour.start_time),
+    end_time: toHHMM(seasonalHour.end_time),
+    is_active: seasonalHour.is_active
+  })
+  const [submitting, setSubmitting] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSubmitting(true)
+
+    try {
+      const response = await fetch(`/api/admin/seasonal-hours/${seasonalHour.id}`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          name: formData.name,
+          start_date: formData.start_date,
+          end_date: formData.end_date,
+          day_of_week: formData.day_of_week,
+          start_time: `${formData.start_time}:00`,
+          end_time: `${formData.end_time}:00`,
+          is_active: formData.is_active
+        })
+      })
+
+      if (response.status === 401) {
+        localStorage.removeItem('adminToken')
+        window.location.href = '/admin'
+        return
+      }
+
+      if (response.ok) {
+        onSuccess()
+      } else {
+        const error = await response.json()
+        alert(`Failed to update seasonal hour: ${error.error}`)
+      }
+    } catch (error) {
+      console.error('Error updating seasonal hour:', error)
+      alert('Failed to update seasonal hour')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-md">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-medium">Edit Seasonal Hour</h3>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            ✕
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Season Name
+            </label>
+            <input
+              type="text"
+              value={formData.name}
+              onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange focus:border-transparent"
+              required
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Start Date
+              </label>
+              <input
+                type="date"
+                value={formData.start_date}
+                onChange={e => setFormData(prev => ({ ...prev, start_date: e.target.value }))}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange focus:border-transparent"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                End Date
+              </label>
+              <input
+                type="date"
+                value={formData.end_date}
+                onChange={e => setFormData(prev => ({ ...prev, end_date: e.target.value }))}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange focus:border-transparent"
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Day of Week
+            </label>
+            <select
+              value={formData.day_of_week}
+              onChange={e => setFormData(prev => ({ ...prev, day_of_week: parseInt(e.target.value) }))}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange focus:border-transparent"
+            >
+              {[
+                { value: 0, label: 'Sunday' },
+                { value: 1, label: 'Monday' },
+                { value: 2, label: 'Tuesday' },
+                { value: 3, label: 'Wednesday' },
+                { value: 4, label: 'Thursday' },
+                { value: 5, label: 'Friday' },
+                { value: 6, label: 'Saturday' }
+              ].map(day => (
+                <option key={day.value} value={day.value}>{day.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Start Time
+              </label>
+              <input
+                type="time"
+                value={formData.start_time}
+                onChange={e => setFormData(prev => ({ ...prev, start_time: e.target.value }))}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange focus:border-transparent"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                End Time
+              </label>
+              <input
+                type="time"
+                value={formData.end_time}
+                onChange={e => setFormData(prev => ({ ...prev, end_time: e.target.value }))}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange focus:border-transparent"
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="flex items-center">
+              <input
+                type="checkbox"
+                checked={formData.is_active}
+                onChange={e => setFormData(prev => ({ ...prev, is_active: e.target.checked }))}
+                className="mr-2"
+              />
+              <span className="text-sm text-gray-700">Active</span>
+            </label>
           </div>
 
           <div className="flex space-x-3 pt-4">

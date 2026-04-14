@@ -174,27 +174,82 @@ export async function getAvailabilityData(date: string): Promise<{
 }
 
 // Generate available time slots for a specific date
+// LAYERED AVAILABILITY SYSTEM:
+//   Layer 1 (Base): Seasonal hours define operating hours (when you're "open")
+//   Layer 2 (Subtract): Weekly blockouts remove time from base hours (school, work, etc.)
+//   Layer 3 (Override): Date exceptions override everything for specific dates
+//   Layer 4 (Subtract): Google Calendar events remove conflicting slots
+//   Result: What remains = what customers can book
 export async function getAvailableSlots(date: string): Promise<string[]> {
   try {
     const { settings, exceptions, googleEvents, seasonalHours } = await getAvailabilityData(date)
 
-    // Priority order:
-    // 1. Date-specific exceptions (highest priority — holidays, blackouts)
-    // 2. Seasonal hours (date-range-specific operating hours)
-    // 3. Regular weekly settings (default schedule)
-
-    // If there are exceptions for this date, they override everything
+    // LAYER 3: Date exceptions override everything for specific dates
     if (exceptions.length > 0) {
-      return await processExceptionsAvailability(date, exceptions, googleEvents)
+      // Check if any exception fully blocks this date
+      const fullDayBlock = exceptions.find(e => !e.is_available && !e.start_time && !e.end_time)
+      if (fullDayBlock) {
+        return [] // Entire day is blocked (holiday, vacation, etc.)
+      }
+
+      // If there are "available" exceptions (special hours), use those exclusively
+      const availableExceptions = exceptions.filter(e => e.is_available)
+      if (availableExceptions.length > 0) {
+        return await processExceptionsAvailability(date, exceptions, googleEvents)
+      }
+
+      // If there are only partial blockout exceptions, they'll be applied as subtractions below
     }
 
-    // If there are active seasonal hours for this date, use those instead of regular settings
+    // LAYER 1: Start with base operating hours
+    let baseSlots: string[] = []
+
     if (seasonalHours.length > 0) {
-      return await processSeasonalAvailability(date, seasonalHours, googleEvents)
+      // Seasonal hours are the base operating hours
+      for (const hours of seasonalHours) {
+        const slots = generateSlotsWithInterval(hours.start_time, hours.end_time, 60)
+        baseSlots.push(...slots)
+      }
+    } else {
+      // No seasonal hours defined — check for "available" weekly settings as fallback
+      const availableSettings = settings.filter(s => s.is_available)
+      if (availableSettings.length > 0) {
+        for (const setting of availableSettings) {
+          const slots = generateSlotsWithInterval(
+            setting.start_time,
+            setting.end_time,
+            setting.slot_interval_minutes
+          )
+          baseSlots.push(...slots)
+        }
+      } else {
+        // No seasonal hours AND no available weekly settings — use hardcoded fallback
+        return getFallbackAvailableSlots(date)
+      }
     }
 
-    // Otherwise, use regular weekly settings
-    return await processRegularAvailability(date, settings, googleEvents)
+    if (baseSlots.length === 0) {
+      return []
+    }
+
+    // LAYER 2: Subtract weekly blockouts (settings with is_available = false)
+    const blockouts = settings.filter(s => !s.is_available)
+    if (blockouts.length > 0) {
+      baseSlots = subtractBlockouts(baseSlots, blockouts)
+    }
+
+    // Also subtract partial date-exception blockouts (ones with specific time ranges)
+    const partialBlockExceptions = exceptions.filter(e => !e.is_available && e.start_time && e.end_time)
+    if (partialBlockExceptions.length > 0) {
+      baseSlots = subtractExceptionBlockouts(baseSlots, partialBlockExceptions)
+    }
+
+    if (baseSlots.length === 0) {
+      return []
+    }
+
+    // LAYER 4: Google Calendar events remove conflicting slots
+    return await filterGoogleCalendarConflicts(date, baseSlots, googleEvents)
   } catch (error) {
     console.error('Error getting available slots:', error)
 
@@ -203,29 +258,43 @@ export async function getAvailableSlots(date: string): Promise<string[]> {
   }
 }
 
-// Process availability based on seasonal hours
-async function processSeasonalAvailability(
-  date: string,
-  seasonalHours: SeasonalHours[],
-  googleEvents: any[]
-): Promise<string[]> {
-  const availableSlots: string[] = []
+// Remove slots that fall within weekly blockout periods
+function subtractBlockouts(slots: string[], blockouts: AvailabilitySetting[]): string[] {
+  return slots.filter(slot => {
+    const slotTime24 = slotTo24Hour(slot)
+    for (const blockout of blockouts) {
+      // Check if slot time falls within the blockout range
+      if (slotTime24 >= blockout.start_time.slice(0, 5) && slotTime24 < blockout.end_time.slice(0, 5)) {
+        return false // Blocked
+      }
+    }
+    return true
+  })
+}
 
-  for (const hours of seasonalHours) {
-    const slots = generateSlotsWithInterval(
-      hours.start_time,
-      hours.end_time,
-      60 // default 1-hour intervals for seasonal hours
-    )
-    availableSlots.push(...slots)
-  }
+// Remove slots that fall within date-exception blockout periods
+function subtractExceptionBlockouts(slots: string[], exceptions: AvailabilityException[]): string[] {
+  return slots.filter(slot => {
+    const slotTime24 = slotTo24Hour(slot)
+    for (const exc of exceptions) {
+      if (exc.start_time && exc.end_time) {
+        if (slotTime24 >= exc.start_time.slice(0, 5) && slotTime24 < exc.end_time.slice(0, 5)) {
+          return false // Blocked
+        }
+      }
+    }
+    return true
+  })
+}
 
-  if (availableSlots.length === 0) {
-    return []
-  }
-
-  // Filter out slots that conflict with Google Calendar events
-  return await filterGoogleCalendarConflicts(date, availableSlots, googleEvents)
+// Convert a 12-hour slot string (e.g. "3:00 PM") to "HH:MM" 24-hour format
+function slotTo24Hour(slot: string): string {
+  const [timeStr, period] = slot.split(' ')
+  const [hours, minutes] = timeStr.split(':').map(Number)
+  let hour24 = hours
+  if (period === 'PM' && hours !== 12) hour24 += 12
+  if (period === 'AM' && hours === 12) hour24 = 0
+  return `${hour24.toString().padStart(2, '0')}:${(minutes || 0).toString().padStart(2, '0')}`
 }
 
 // Process availability based on date-specific exceptions
@@ -252,38 +321,6 @@ async function processExceptionsAvailability(
       const slots = generateHourlySlots(exception.start_time, exception.end_time)
       availableSlots.push(...slots)
     }
-  }
-
-  // Filter out slots that conflict with Google Calendar events
-  return await filterGoogleCalendarConflicts(date, availableSlots, googleEvents)
-}
-
-// Process availability based on regular weekly settings
-async function processRegularAvailability(
-  date: string,
-  settings: AvailabilitySetting[],
-  googleEvents: any[]
-): Promise<string[]> {
-  const availableSlots: string[] = []
-
-  for (const setting of settings) {
-    if (!setting.is_available) {
-      // This setting blocks availability
-      continue
-    }
-
-    // Generate slots for this available time block
-    const slots = generateSlotsWithInterval(
-      setting.start_time,
-      setting.end_time,
-      setting.slot_interval_minutes
-    )
-    availableSlots.push(...slots)
-  }
-
-  // If no settings found, fall back to original hardcoded logic
-  if (availableSlots.length === 0) {
-    return getFallbackAvailableSlots(date)
   }
 
   // Filter out slots that conflict with Google Calendar events
@@ -372,70 +409,15 @@ function getFallbackAvailableSlots(date: string): string[] {
     : ['3:00 PM', '4:00 PM', '5:00 PM']
 }
 
-// Updated business hours validation using database settings
+// Validate that a requested time is within available business hours
+// Uses the same layered system as getAvailableSlots for consistency
 export async function validateBusinessHours(date: string, time: string): Promise<boolean> {
   try {
-    const { settings, exceptions } = await getAvailabilityData(date)
+    // Get all available slots (already applies the full layered system)
+    const availableSlots = await getAvailableSlots(date)
 
-    // Parse requested time
-    const [timeStr, period] = time.split(' ')
-    const [hours, minutes] = timeStr.split(':').map(Number)
-    let hour24 = hours
-    if (period === 'PM' && hours !== 12) hour24 += 12
-    if (period === 'AM' && hours === 12) hour24 = 0
-
-    const requestedTime = `${hour24.toString().padStart(2, '0')}:${(minutes || 0).toString().padStart(2, '0')}:00`
-
-    // Check exceptions first (they override regular settings)
-    for (const exception of exceptions) {
-      if (!exception.is_available) {
-        // If there's a blocking exception for this date
-        if (!exception.start_time || !exception.end_time) {
-          // Full day block
-          return false
-        } else {
-          // Partial day block - check if requested time falls in blocked range
-          if (requestedTime >= exception.start_time && requestedTime < exception.end_time) {
-            return false
-          }
-        }
-      } else {
-        // If there's an availability exception for this date
-        if (!exception.start_time || !exception.end_time) {
-          // Full day available - check other exceptions
-          continue
-        } else {
-          // Partial day available - check if requested time falls in available range
-          if (requestedTime >= exception.start_time && requestedTime < exception.end_time) {
-            return true
-          }
-        }
-      }
-    }
-
-    // If exceptions exist but none matched, and we had available exceptions, it's not available
-    if (exceptions.length > 0 && exceptions.some(e => e.is_available)) {
-      return false
-    }
-
-    // Check regular weekly settings
-    for (const setting of settings) {
-      if (setting.is_available && requestedTime >= setting.start_time && requestedTime < setting.end_time) {
-        return true
-      }
-      if (!setting.is_available && requestedTime >= setting.start_time && requestedTime < setting.end_time) {
-        return false
-      }
-    }
-
-    // If no settings found, fall back to original logic
-    if (settings.length === 0) {
-      return validateBusinessHoursFallback(date, time)
-    }
-
-    // If no matching setting found, assume not available
-    return false
-
+    // Check if the requested time matches any available slot
+    return availableSlots.includes(time)
   } catch (error) {
     console.error('Error validating business hours:', error)
     return validateBusinessHoursFallback(date, time)
