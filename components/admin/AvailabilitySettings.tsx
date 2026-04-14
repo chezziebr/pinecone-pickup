@@ -22,6 +22,8 @@ export default function AvailabilitySettings({ token }: AvailabilitySettingsProp
   const [activeSubTab, setActiveSubTab] = useState('weekly')
   const [showAddSettingModal, setShowAddSettingModal] = useState(false)
   const [showAddExceptionModal, setShowAddExceptionModal] = useState(false)
+  const [editingSetting, setEditingSetting] = useState<AvailabilitySetting | null>(null)
+  const [editingException, setEditingException] = useState<AvailabilityException | null>(null)
 
   useEffect(() => {
     fetchData()
@@ -169,7 +171,7 @@ export default function AvailabilitySettings({ token }: AvailabilitySettingsProp
             </button>
           </div>
 
-          <WeeklyScheduleView settings={settings} onDelete={deleteSetting} />
+          <WeeklyScheduleView settings={settings} onDelete={deleteSetting} onEdit={setEditingSetting} />
         </div>
       )}
 
@@ -188,7 +190,7 @@ export default function AvailabilitySettings({ token }: AvailabilitySettingsProp
             </button>
           </div>
 
-          <SpecialDatesView exceptions={exceptions} onDelete={deleteException} />
+          <SpecialDatesView exceptions={exceptions} onDelete={deleteException} onEdit={setEditingException} />
         </div>
       )}
 
@@ -214,6 +216,30 @@ export default function AvailabilitySettings({ token }: AvailabilitySettingsProp
           }}
         />
       )}
+
+      {editingSetting && (
+        <EditSettingModal
+          token={token}
+          setting={editingSetting}
+          onClose={() => setEditingSetting(null)}
+          onSuccess={() => {
+            setEditingSetting(null)
+            fetchData()
+          }}
+        />
+      )}
+
+      {editingException && (
+        <EditExceptionModal
+          token={token}
+          exception={editingException}
+          onClose={() => setEditingException(null)}
+          onSuccess={() => {
+            setEditingException(null)
+            fetchData()
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -221,10 +247,12 @@ export default function AvailabilitySettings({ token }: AvailabilitySettingsProp
 // Weekly Schedule View Component
 function WeeklyScheduleView({
   settings,
-  onDelete
+  onDelete,
+  onEdit
 }: {
   settings: AvailabilitySetting[]
   onDelete: (id: string) => void
+  onEdit: (setting: AvailabilitySetting) => void
 }) {
   // Group settings by day of week
   const settingsByDay = settings.reduce((acc, setting) => {
@@ -279,6 +307,13 @@ function WeeklyScheduleView({
                       {setting.is_available ? 'Available' : 'Blocked'}
                     </span>
                     <button
+                      onClick={() => onEdit(setting)}
+                      className="text-blue-600 hover:text-blue-800 p-1"
+                      title="Edit"
+                    >
+                      ✏️
+                    </button>
+                    <button
                       onClick={() => onDelete(setting.id)}
                       className="text-red-600 hover:text-red-800 p-1"
                       title="Delete"
@@ -301,10 +336,12 @@ function WeeklyScheduleView({
 // Special Dates View Component
 function SpecialDatesView({
   exceptions,
-  onDelete
+  onDelete,
+  onEdit
 }: {
   exceptions: AvailabilityException[]
   onDelete: (id: string) => void
+  onEdit: (exception: AvailabilityException) => void
 }) {
   const sortedExceptions = exceptions.sort((a, b) =>
     new Date(a.specific_date).getTime() - new Date(b.specific_date).getTime()
@@ -369,6 +406,13 @@ function SpecialDatesView({
             }`}>
               {exception.is_available ? 'Available' : 'Blocked'}
             </span>
+            <button
+              onClick={() => onEdit(exception)}
+              className="text-blue-600 hover:text-blue-800 p-1"
+              title="Edit"
+            >
+              ✏️
+            </button>
             <button
               onClick={() => onDelete(exception.id)}
               className="text-red-600 hover:text-red-800 p-1"
@@ -843,6 +887,417 @@ function AddExceptionModal({
               className="flex-1 px-4 py-2 bg-orange hover:bg-orange/90 text-white rounded-lg transition-colors disabled:opacity-50"
             >
               {submitting ? 'Creating...' : 'Create'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+// Edit Setting Modal Component
+function EditSettingModal({
+  token,
+  setting,
+  onClose,
+  onSuccess
+}: {
+  token: string
+  setting: AvailabilitySetting
+  onClose: () => void
+  onSuccess: () => void
+}) {
+  // Extract HH:MM from HH:MM:SS stored in the database
+  const toHHMM = (time: string) => time.slice(0, 5)
+
+  const [formData, setFormData] = useState({
+    day_of_week: setting.day_of_week,
+    start_time: toHHMM(setting.start_time),
+    end_time: toHHMM(setting.end_time),
+    is_available: setting.is_available,
+    description: setting.description || ''
+  })
+  const [submitting, setSubmitting] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSubmitting(true)
+
+    try {
+      const response = await fetch(`/api/admin/availability-settings/${setting.id}`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(formData)
+      })
+
+      if (response.ok) {
+        onSuccess()
+      } else {
+        const error = await response.json()
+        alert(`Failed to update setting: ${error.error}`)
+      }
+    } catch (error) {
+      console.error('Error updating setting:', error)
+      alert('Failed to update setting')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-md">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-medium">Edit Time Block</h3>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            ✕
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Day of Week
+            </label>
+            <select
+              value={formData.day_of_week}
+              onChange={e => setFormData(prev => ({ ...prev, day_of_week: parseInt(e.target.value) }))}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange focus:border-transparent"
+            >
+              {[
+                { value: 0, label: 'Sunday' },
+                { value: 1, label: 'Monday' },
+                { value: 2, label: 'Tuesday' },
+                { value: 3, label: 'Wednesday' },
+                { value: 4, label: 'Thursday' },
+                { value: 5, label: 'Friday' },
+                { value: 6, label: 'Saturday' }
+              ].map(day => (
+                <option key={day.value} value={day.value}>{day.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Start Time
+              </label>
+              <input
+                type="time"
+                value={formData.start_time}
+                onChange={e => setFormData(prev => ({ ...prev, start_time: e.target.value }))}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange focus:border-transparent"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                End Time
+              </label>
+              <input
+                type="time"
+                value={formData.end_time}
+                onChange={e => setFormData(prev => ({ ...prev, end_time: e.target.value }))}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange focus:border-transparent"
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Availability
+            </label>
+            <div className="space-y-2">
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  name="edit-availability"
+                  checked={formData.is_available === true}
+                  onChange={() => setFormData(prev => ({ ...prev, is_available: true }))}
+                  className="mr-2"
+                />
+                <span className="text-green-700">Available for bookings</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  name="edit-availability"
+                  checked={formData.is_available === false}
+                  onChange={() => setFormData(prev => ({ ...prev, is_available: false }))}
+                  className="mr-2"
+                />
+                <span className="text-red-700">Blocked (not available)</span>
+              </label>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Description (Optional)
+            </label>
+            <input
+              type="text"
+              value={formData.description}
+              onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))}
+              placeholder="e.g., School hours, Work time, etc."
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange focus:border-transparent"
+            />
+          </div>
+
+          <div className="flex space-x-3 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="flex-1 px-4 py-2 bg-orange hover:bg-orange/90 text-white rounded-lg transition-colors disabled:opacity-50"
+            >
+              {submitting ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+// Edit Exception Modal Component
+function EditExceptionModal({
+  token,
+  exception,
+  onClose,
+  onSuccess
+}: {
+  token: string
+  exception: AvailabilityException
+  onClose: () => void
+  onSuccess: () => void
+}) {
+  const toHHMM = (time: string | null) => time ? time.slice(0, 5) : ''
+
+  const [formData, setFormData] = useState({
+    specific_date: exception.specific_date,
+    start_time: toHHMM(exception.start_time),
+    end_time: toHHMM(exception.end_time),
+    is_available: exception.is_available,
+    reason: exception.reason || '',
+    override_type: exception.override_type
+  })
+  const [isFullDay, setIsFullDay] = useState(!exception.start_time && !exception.end_time)
+  const [submitting, setSubmitting] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSubmitting(true)
+
+    try {
+      const requestData: any = {
+        specific_date: formData.specific_date,
+        is_available: formData.is_available,
+        reason: formData.reason || undefined,
+        override_type: formData.override_type
+      }
+
+      if (!isFullDay) {
+        requestData.start_time = formData.start_time
+        requestData.end_time = formData.end_time
+      } else {
+        requestData.start_time = null
+        requestData.end_time = null
+      }
+
+      const response = await fetch(`/api/admin/availability-exceptions/${exception.id}`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(requestData)
+      })
+
+      if (response.ok) {
+        onSuccess()
+      } else {
+        const error = await response.json()
+        alert(`Failed to update exception: ${error.error}`)
+      }
+    } catch (error) {
+      console.error('Error updating exception:', error)
+      alert('Failed to update exception')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-md">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-medium">Edit Special Date</h3>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            ✕
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Date
+            </label>
+            <input
+              type="date"
+              value={formData.specific_date}
+              onChange={e => setFormData(prev => ({ ...prev, specific_date: e.target.value }))}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange focus:border-transparent"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Time Range
+            </label>
+            <div className="space-y-2">
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  name="edit-timeRange"
+                  checked={isFullDay}
+                  onChange={() => setIsFullDay(true)}
+                  className="mr-2"
+                />
+                <span>Full day</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  name="edit-timeRange"
+                  checked={!isFullDay}
+                  onChange={() => setIsFullDay(false)}
+                  className="mr-2"
+                />
+                <span>Specific time range</span>
+              </label>
+            </div>
+          </div>
+
+          {!isFullDay && (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Start Time
+                </label>
+                <input
+                  type="time"
+                  value={formData.start_time}
+                  onChange={e => setFormData(prev => ({ ...prev, start_time: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange focus:border-transparent"
+                  required={!isFullDay}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  End Time
+                </label>
+                <input
+                  type="time"
+                  value={formData.end_time}
+                  onChange={e => setFormData(prev => ({ ...prev, end_time: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange focus:border-transparent"
+                  required={!isFullDay}
+                />
+              </div>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Exception Type
+            </label>
+            <select
+              value={formData.override_type}
+              onChange={e => setFormData(prev => ({ ...prev, override_type: e.target.value as any }))}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange focus:border-transparent"
+            >
+              <option value="blackout">Blackout (Not available)</option>
+              <option value="holiday">Holiday</option>
+              <option value="special_hours">Special Hours</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Availability
+            </label>
+            <div className="space-y-2">
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  name="edit-exception-availability"
+                  checked={formData.is_available === true}
+                  onChange={() => setFormData(prev => ({ ...prev, is_available: true }))}
+                  className="mr-2"
+                />
+                <span className="text-green-700">Available for bookings</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  name="edit-exception-availability"
+                  checked={formData.is_available === false}
+                  onChange={() => setFormData(prev => ({ ...prev, is_available: false }))}
+                  className="mr-2"
+                />
+                <span className="text-red-700">Blocked (not available)</span>
+              </label>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Reason (Optional)
+            </label>
+            <input
+              type="text"
+              value={formData.reason}
+              onChange={e => setFormData(prev => ({ ...prev, reason: e.target.value }))}
+              placeholder="e.g., Christmas holiday, Vacation, etc."
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange focus:border-transparent"
+            />
+          </div>
+
+          <div className="flex space-x-3 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="flex-1 px-4 py-2 bg-orange hover:bg-orange/90 text-white rounded-lg transition-colors disabled:opacity-50"
+            >
+              {submitting ? 'Saving...' : 'Save Changes'}
             </button>
           </div>
         </form>

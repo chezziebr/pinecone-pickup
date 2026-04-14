@@ -3,6 +3,9 @@ import { supabaseAdmin } from './supabase'
 import { google } from 'googleapis'
 import { AvailabilitySetting, AvailabilityException, convertTo12Hour } from './types'
 
+// Default buffer in minutes (used if no setting found in DB)
+const DEFAULT_BUFFER_MINUTES = 15
+
 // OAuth client creation function (copied from google-calendar.ts)
 function createOAuthClient(refreshToken: string) {
   const oauth2Client = new google.auth.OAuth2(
@@ -18,24 +21,63 @@ function createOAuthClient(refreshToken: string) {
   return oauth2Client
 }
 
+// Fetch the configured buffer time from the database
+async function getBufferMinutes(): Promise<number> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('business_settings')
+      .select('value')
+      .eq('key', 'calendar_buffer_minutes')
+      .single()
+
+    if (error || !data) return DEFAULT_BUFFER_MINUTES
+    return parseInt(data.value) || DEFAULT_BUFFER_MINUTES
+  } catch {
+    return DEFAULT_BUFFER_MINUTES
+  }
+}
+
 // Check if a booking conflicts with existing Google Calendar events
 function hasGoogleCalendarConflict(
-  eventStart: Date,
-  eventEnd: Date,
-  existingEvents: any[]
+  slotStart: Date,
+  slotEnd: Date,
+  existingEvents: any[],
+  bufferMinutes: number
 ): boolean {
-  const bufferStart = new Date(eventStart.getTime() - (15 * 60 * 1000)) // 15 min before
-  const bufferEnd = new Date(eventEnd.getTime() + (15 * 60 * 1000)) // 15 min after
+  const bufferMs = bufferMinutes * 60 * 1000
 
   return existingEvents.some(event => {
+    // Handle all-day events (they have .date instead of .dateTime)
+    if (event.start?.date && !event.start?.dateTime) {
+      // All-day event blocks the entire day
+      return true
+    }
+
     if (!event.start?.dateTime || !event.end?.dateTime) return false
 
-    const eventStartTime = new Date(event.start.dateTime)
-    const eventEndTime = new Date(event.end.dateTime)
+    const eventStart = new Date(event.start.dateTime)
+    const eventEnd = new Date(event.end.dateTime)
 
-    // Check if the new booking overlaps with existing event (including buffer)
-    return eventStart < eventEndTime && eventEnd > eventStartTime
+    // Expand the event window by the buffer on both sides
+    const bufferedEventStart = new Date(eventStart.getTime() - bufferMs)
+    const bufferedEventEnd = new Date(eventEnd.getTime() + bufferMs)
+
+    // Check if the slot overlaps with the buffered event window
+    return slotStart < bufferedEventEnd && slotEnd > bufferedEventStart
   })
+}
+
+// Seasonal hours type
+interface SeasonalHours {
+  id: string
+  name: string
+  start_date: string
+  end_date: string
+  day_of_week: number
+  start_time: string
+  end_time: string
+  is_active: boolean
+  priority: number
 }
 
 // Get all availability settings and exceptions for a specific date
@@ -43,11 +85,12 @@ export async function getAvailabilityData(date: string): Promise<{
   settings: AvailabilitySetting[]
   exceptions: AvailabilityException[]
   googleEvents: any[]
+  seasonalHours: SeasonalHours[]
 }> {
   const dayOfWeek = new Date(date).getDay()
 
-  // Get database settings and exceptions
-  const [settingsResult, exceptionsResult] = await Promise.all([
+  // Get database settings, exceptions, and seasonal hours
+  const [settingsResult, exceptionsResult, seasonalResult] = await Promise.all([
     supabaseAdmin
       .from('availability_settings')
       .select('*')
@@ -57,7 +100,16 @@ export async function getAvailabilityData(date: string): Promise<{
     supabaseAdmin
       .from('availability_exceptions')
       .select('*')
-      .eq('specific_date', date)
+      .eq('specific_date', date),
+
+    supabaseAdmin
+      .from('seasonal_hours')
+      .select('*')
+      .eq('day_of_week', dayOfWeek)
+      .eq('is_active', true)
+      .lte('start_date', date)
+      .gte('end_date', date)
+      .order('priority', { ascending: false })
   ])
 
   if (settingsResult.error) {
@@ -68,6 +120,11 @@ export async function getAvailabilityData(date: string): Promise<{
   if (exceptionsResult.error) {
     console.error('Error fetching availability exceptions:', exceptionsResult.error)
     throw new Error('Failed to fetch availability exceptions')
+  }
+
+  // Seasonal hours table may not exist yet — gracefully handle
+  if (seasonalResult.error) {
+    console.warn('Seasonal hours table not available:', seasonalResult.error.message)
   }
 
   // Get Google Calendar events
@@ -111,22 +168,33 @@ export async function getAvailabilityData(date: string): Promise<{
   return {
     settings: settingsResult.data || [],
     exceptions: exceptionsResult.data || [],
-    googleEvents
+    googleEvents,
+    seasonalHours: seasonalResult.data || []
   }
 }
 
 // Generate available time slots for a specific date
 export async function getAvailableSlots(date: string): Promise<string[]> {
   try {
-    const { settings, exceptions, googleEvents } = await getAvailabilityData(date)
+    const { settings, exceptions, googleEvents, seasonalHours } = await getAvailabilityData(date)
 
-    // If there are exceptions for this date, they override the regular schedule
+    // Priority order:
+    // 1. Date-specific exceptions (highest priority — holidays, blackouts)
+    // 2. Seasonal hours (date-range-specific operating hours)
+    // 3. Regular weekly settings (default schedule)
+
+    // If there are exceptions for this date, they override everything
     if (exceptions.length > 0) {
-      return processExceptionsAvailability(date, exceptions, googleEvents)
+      return await processExceptionsAvailability(date, exceptions, googleEvents)
+    }
+
+    // If there are active seasonal hours for this date, use those instead of regular settings
+    if (seasonalHours.length > 0) {
+      return await processSeasonalAvailability(date, seasonalHours, googleEvents)
     }
 
     // Otherwise, use regular weekly settings
-    return processRegularAvailability(date, settings, googleEvents)
+    return await processRegularAvailability(date, settings, googleEvents)
   } catch (error) {
     console.error('Error getting available slots:', error)
 
@@ -135,12 +203,37 @@ export async function getAvailableSlots(date: string): Promise<string[]> {
   }
 }
 
+// Process availability based on seasonal hours
+async function processSeasonalAvailability(
+  date: string,
+  seasonalHours: SeasonalHours[],
+  googleEvents: any[]
+): Promise<string[]> {
+  const availableSlots: string[] = []
+
+  for (const hours of seasonalHours) {
+    const slots = generateSlotsWithInterval(
+      hours.start_time,
+      hours.end_time,
+      60 // default 1-hour intervals for seasonal hours
+    )
+    availableSlots.push(...slots)
+  }
+
+  if (availableSlots.length === 0) {
+    return []
+  }
+
+  // Filter out slots that conflict with Google Calendar events
+  return await filterGoogleCalendarConflicts(date, availableSlots, googleEvents)
+}
+
 // Process availability based on date-specific exceptions
-function processExceptionsAvailability(
+async function processExceptionsAvailability(
   date: string,
   exceptions: AvailabilityException[],
   googleEvents: any[]
-): string[] {
+): Promise<string[]> {
   const availableSlots: string[] = []
 
   for (const exception of exceptions) {
@@ -162,15 +255,15 @@ function processExceptionsAvailability(
   }
 
   // Filter out slots that conflict with Google Calendar events
-  return filterGoogleCalendarConflicts(date, availableSlots, googleEvents)
+  return await filterGoogleCalendarConflicts(date, availableSlots, googleEvents)
 }
 
 // Process availability based on regular weekly settings
-function processRegularAvailability(
+async function processRegularAvailability(
   date: string,
   settings: AvailabilitySetting[],
   googleEvents: any[]
-): string[] {
+): Promise<string[]> {
   const availableSlots: string[] = []
 
   for (const setting of settings) {
@@ -194,7 +287,7 @@ function processRegularAvailability(
   }
 
   // Filter out slots that conflict with Google Calendar events
-  return filterGoogleCalendarConflicts(date, availableSlots, googleEvents)
+  return await filterGoogleCalendarConflicts(date, availableSlots, googleEvents)
 }
 
 // Generate time slots with specified interval
@@ -239,11 +332,13 @@ function generateHourlySlots(startTime: string, endTime: string): string[] {
 }
 
 // Filter out slots that conflict with Google Calendar events
-function filterGoogleCalendarConflicts(
+async function filterGoogleCalendarConflicts(
   date: string,
   slots: string[],
   googleEvents: any[]
-): string[] {
+): Promise<string[]> {
+  const bufferMinutes = await getBufferMinutes()
+
   return slots.filter(slot => {
     // Convert slot time to Date object
     const [timeStr, period] = slot.split(' ')
@@ -253,14 +348,14 @@ function filterGoogleCalendarConflicts(
     if (period === 'PM' && hours !== 12) hour24 += 12
     if (period === 'AM' && hours === 12) hour24 = 0
 
-    const slotStart = new Date(date + 'T00:00:00')
-    slotStart.setHours(hour24, minutes || 0, 0, 0)
+    // Use explicit timezone-aware date construction
+    const slotStart = new Date(`${date}T${hour24.toString().padStart(2, '0')}:${(minutes || 0).toString().padStart(2, '0')}:00-07:00`)
 
     // Assume 90 minutes duration for service (matching existing logic)
     const slotEnd = new Date(slotStart.getTime() + (90 * 60 * 1000))
 
     // Check if this slot conflicts with any Google Calendar events
-    return !hasGoogleCalendarConflict(slotStart, slotEnd, googleEvents)
+    return !hasGoogleCalendarConflict(slotStart, slotEnd, googleEvents, bufferMinutes)
   })
 }
 
