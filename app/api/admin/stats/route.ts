@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
-import { requireAdminAuth } from '@/lib/auth'
+import { requireAdminAuth, handleRouteError } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
   try {
@@ -103,10 +103,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(stats)
 
   } catch (error) {
-    console.error('Admin stats error:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch stats' },
-      { status: 500 }
-    )
+    return handleRouteError(error, 'Admin stats error')
   }
 }

@@ -50,6 +50,13 @@ export default function AvailabilitySettings({ token }: AvailabilitySettingsProp
         })
       ])
 
+      // If 401, token is invalid — redirect to login
+      if (settingsResponse.status === 401 || exceptionsResponse.status === 401) {
+        localStorage.removeItem('adminToken')
+        window.location.href = '/admin'
+        return
+      }
+
       if (settingsResponse.ok) {
         const settingsData = await settingsResponse.json()
         setSettings(settingsData.settings)

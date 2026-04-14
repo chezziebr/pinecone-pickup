@@ -7,7 +7,7 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD
 const JWT_SECRET = process.env.JWT_SECRET
 
 if (!ADMIN_PASSWORD || !JWT_SECRET) {
-  throw new Error('Missing required environment variables: ADMIN_PASSWORD and JWT_SECRET must be set')
+  console.error('WARNING: Missing ADMIN_PASSWORD or JWT_SECRET environment variables. Admin login will fail.')
 }
 
 // Rate limiting store (in production, use Redis)
@@ -49,6 +49,15 @@ function recordLoginAttempt(key: string, success: boolean) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Check env vars are configured
+    if (!ADMIN_PASSWORD || !JWT_SECRET) {
+      console.error('Admin login failed: ADMIN_PASSWORD or JWT_SECRET not configured')
+      return NextResponse.json(
+        { error: 'Server configuration error. Contact administrator.' },
+        { status: 500 }
+      )
+    }
+
     const rateLimitKey = getRateLimitKey(request)
 
     // Check rate limiting

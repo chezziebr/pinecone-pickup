@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
-import { requireAdminAuth } from '@/lib/auth'
+import { requireAdminAuth, handleRouteError } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
   try {
@@ -21,11 +21,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ settings })
   } catch (error) {
-    console.error('Business settings API error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return handleRouteError(error, 'Business settings GET error')
   }
 }
 
@@ -73,10 +69,6 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json({ setting: data })
   } catch (error) {
-    console.error('Business settings PUT error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return handleRouteError(error, 'Business settings PUT error')
   }
 }

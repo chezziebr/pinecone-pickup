@@ -58,11 +58,20 @@ export default function AdminDashboard() {
         })
       ])
 
-      if (statsResponse.ok && bookingsResponse.ok) {
-        const statsData = await statsResponse.json()
-        const bookingsData = await bookingsResponse.json()
+      // If any endpoint returns 401, token is invalid — redirect to login
+      if (statsResponse.status === 401 || bookingsResponse.status === 401) {
+        localStorage.removeItem('adminToken')
+        router.push('/admin')
+        return
+      }
 
+      if (statsResponse.ok) {
+        const statsData = await statsResponse.json()
         setStats(statsData)
+      }
+
+      if (bookingsResponse.ok) {
+        const bookingsData = await bookingsResponse.json()
         setRecentBookings(bookingsData.bookings || [])
       }
     } catch (error) {

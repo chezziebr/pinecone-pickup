@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
-import { requireAdminAuth } from '@/lib/auth'
+import { requireAdminAuth, handleRouteError } from '@/lib/auth'
 import { validateAdminBookingUpdate, AdminBookingUpdate } from '@/lib/validation'
 
 export async function GET(request: NextRequest) {
@@ -67,11 +67,7 @@ export async function GET(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('Admin bookings error:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch bookings' },
-      { status: 500 }
-    )
+    return handleRouteError(error, 'Admin bookings GET error')
   }
 }
 
@@ -118,10 +114,6 @@ export async function PATCH(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('Admin booking update error:', error)
-    return NextResponse.json(
-      { error: 'Failed to update booking' },
-      { status: 500 }
-    )
+    return handleRouteError(error, 'Admin booking update error')
   }
 }

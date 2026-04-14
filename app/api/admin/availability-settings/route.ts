@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
-import { requireAdminAuth } from '@/lib/auth'
+import { requireAdminAuth, handleRouteError } from '@/lib/auth'
 import {
   AvailabilitySetting,
   CreateAvailabilitySettingRequest,
@@ -28,11 +28,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ settings })
   } catch (error) {
-    console.error('Availability settings API error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return handleRouteError(error, 'Availability settings GET error')
   }
 }
 
@@ -109,11 +105,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ setting: data }, { status: 201 })
   } catch (error) {
-    console.error('Availability settings POST error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return handleRouteError(error, 'Availability settings POST error')
   }
 }
 
@@ -147,10 +139,6 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Availability settings DELETE error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return handleRouteError(error, 'Availability settings DELETE error')
   }
 }

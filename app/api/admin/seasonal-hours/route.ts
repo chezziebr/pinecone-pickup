@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
-import { requireAdminAuth } from '@/lib/auth'
+import { requireAdminAuth, handleRouteError } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
   try {
@@ -21,11 +21,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ hours })
   } catch (error) {
-    console.error('Seasonal hours API error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return handleRouteError(error, 'Seasonal hours GET error')
   }
 }
 
@@ -93,11 +89,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ hours: data }, { status: 201 })
   } catch (error) {
-    console.error('Seasonal hours POST error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return handleRouteError(error, 'Seasonal hours POST error')
   }
 }
 
@@ -130,10 +122,6 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Seasonal hours DELETE error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return handleRouteError(error, 'Seasonal hours DELETE error')
   }
 }

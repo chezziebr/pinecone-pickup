@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
-import { requireAdminAuth } from '@/lib/auth'
+import { requireAdminAuth, handleRouteError } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
   try {
@@ -89,10 +89,6 @@ export async function GET(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('Admin customers error:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch customers' },
-      { status: 500 }
-    )
+    return handleRouteError(error, 'Admin customers GET error')
   }
 }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
-import { requireAdminAuth } from '@/lib/auth'
+import { requireAdminAuth, handleRouteError } from '@/lib/auth'
 
 export async function PUT(
   request: NextRequest,
@@ -53,10 +53,6 @@ export async function PUT(
 
     return NextResponse.json({ hours: data })
   } catch (error) {
-    console.error('Seasonal hours PUT error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return handleRouteError(error, 'Seasonal hours PUT error')
   }
 }

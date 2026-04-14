@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
-import { requireAdminAuth } from '@/lib/auth'
+import { requireAdminAuth, handleRouteError } from '@/lib/auth'
 import { UpdateAvailabilityExceptionRequest } from '@/lib/types'
 
 export async function PUT(
@@ -95,10 +95,6 @@ export async function PUT(
 
     return NextResponse.json({ exception: data })
   } catch (error) {
-    console.error('Availability exceptions PUT error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return handleRouteError(error, 'Availability exceptions PUT error')
   }
 }
