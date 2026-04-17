@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAdminAuth, handleRouteError } from '@/lib/auth'
+import { normalizeTime } from '@/lib/types'
 
 export async function PUT(
   request: NextRequest,
@@ -19,19 +20,20 @@ export async function PUT(
     if (body.start_date !== undefined) updateData.start_date = body.start_date
     if (body.end_date !== undefined) updateData.end_date = body.end_date
     if (body.day_of_week !== undefined) updateData.day_of_week = body.day_of_week
+
     if (body.start_time !== undefined) {
-      const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/
-      if (!timeRegex.test(body.start_time)) {
-        return NextResponse.json({ error: 'Invalid start_time format' }, { status: 400 })
+      const normalized = normalizeTime(body.start_time)
+      if (!normalized) {
+        return NextResponse.json({ error: 'Invalid start_time format. Use HH:MM in 24-hour format or 12-hour format (e.g., "3:30 PM")' }, { status: 400 })
       }
-      updateData.start_time = body.start_time + ':00'
+      updateData.start_time = normalized
     }
     if (body.end_time !== undefined) {
-      const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/
-      if (!timeRegex.test(body.end_time)) {
-        return NextResponse.json({ error: 'Invalid end_time format' }, { status: 400 })
+      const normalized = normalizeTime(body.end_time)
+      if (!normalized) {
+        return NextResponse.json({ error: 'Invalid end_time format. Use HH:MM in 24-hour format or 12-hour format (e.g., "3:30 PM")' }, { status: 400 })
       }
-      updateData.end_time = body.end_time + ':00'
+      updateData.end_time = normalized
     }
     if (body.is_active !== undefined) updateData.is_active = body.is_active
     if (body.priority !== undefined) updateData.priority = body.priority

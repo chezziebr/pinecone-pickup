@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAdminAuth, handleRouteError } from '@/lib/auth'
+import { normalizeTime } from '@/lib/types'
 
 export async function GET(request: NextRequest) {
   try {
@@ -55,9 +56,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Validate time format (HH:MM)
-    const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/
-    if (!timeRegex.test(body.start_time) || !timeRegex.test(body.end_time)) {
+    const normalizedStartTime = normalizeTime(body.start_time)
+    const normalizedEndTime = normalizeTime(body.end_time)
+
+    if (!normalizedStartTime || !normalizedEndTime) {
       return NextResponse.json(
         { error: 'Invalid time format. Use HH:MM in 24-hour format' },
         { status: 400 }
@@ -71,8 +73,8 @@ export async function POST(request: NextRequest) {
         start_date: body.start_date,
         end_date: body.end_date,
         day_of_week: body.day_of_week,
-        start_time: body.start_time + ':00',
-        end_time: body.end_time + ':00',
+        start_time: normalizedStartTime,
+        end_time: normalizedEndTime,
         is_active: body.is_active !== false,
         priority: body.priority || 0
       })

@@ -4,6 +4,7 @@ import { requireAdminAuth, handleRouteError } from '@/lib/auth'
 import {
   AvailabilityException,
   CreateAvailabilityExceptionRequest,
+  normalizeTime
 } from '@/lib/types'
 
 export async function GET(request: NextRequest) {
@@ -72,24 +73,16 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Validate time format if provided (HH:MM)
-    const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/
-    if (body.start_time && !timeRegex.test(body.start_time)) {
-      return NextResponse.json(
-        { error: 'Invalid start_time format. Use HH:MM in 24-hour format' },
-        { status: 400 }
-      )
-    }
-    if (body.end_time && !timeRegex.test(body.end_time)) {
-      return NextResponse.json(
-        { error: 'Invalid end_time format. Use HH:MM in 24-hour format' },
-        { status: 400 }
-      )
-    }
+    // Normalize time format if provided (supports HH:MM, HH:MM:SS, and 12-hour format)
+    const startTime = body.start_time ? normalizeTime(body.start_time) : null
+    const endTime = body.end_time ? normalizeTime(body.end_time) : null
 
-    // Convert times to full time format for database (if provided)
-    const startTime = body.start_time ? body.start_time + ':00' : null
-    const endTime = body.end_time ? body.end_time + ':00' : null
+    if ((body.start_time && !startTime) || (body.end_time && !endTime)) {
+      return NextResponse.json(
+        { error: 'Invalid time format. Use HH:MM in 24-hour format or 12-hour format (e.g., "3:30 PM")' },
+        { status: 400 }
+      )
+    }
 
     // Validate that start time is before end time if both are provided
     if (startTime && endTime && startTime >= endTime) {

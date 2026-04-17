@@ -69,3 +69,24 @@ export function getDayName(dayOfWeek: number): string {
   const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
   return days[dayOfWeek] || 'Unknown'
 }
+
+// Normalize any time string to HH:MM:SS format for database storage
+// Accepts: "15:30", "15:30:00", "3:30 PM", "03:30 PM"
+export function normalizeTime(timeStr: string): string | null {
+  if (!timeStr) return null
+  // Already HH:MM:SS
+  if (/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$/.test(timeStr)) return timeStr
+  // HH:MM (24h)
+  if (/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(timeStr)) return timeStr + ':00'
+  // 12-hour: "3:30 PM", "03:30 PM", "12:00 AM"
+  const match12 = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i)
+  if (match12) {
+    let hours = parseInt(match12[1])
+    const minutes = match12[2]
+    const period = match12[3].toUpperCase()
+    if (period === 'PM' && hours !== 12) hours += 12
+    if (period === 'AM' && hours === 12) hours = 0
+    return `${hours.toString().padStart(2, '0')}:${minutes}:00`
+  }
+  return null
+}

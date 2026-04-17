@@ -4,7 +4,8 @@ import { requireAdminAuth, handleRouteError } from '@/lib/auth'
 import {
   AvailabilitySetting,
   CreateAvailabilitySettingRequest,
-  UpdateAvailabilitySettingRequest
+  UpdateAvailabilitySettingRequest,
+  normalizeTime
 } from '@/lib/types'
 
 export async function GET(request: NextRequest) {
@@ -54,18 +55,16 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Validate time format (HH:MM)
-    const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/
-    if (!timeRegex.test(body.start_time) || !timeRegex.test(body.end_time)) {
+    // Normalize time format (supports HH:MM, HH:MM:SS, and 12-hour format)
+    const startTime = normalizeTime(body.start_time)
+    const endTime = normalizeTime(body.end_time)
+
+    if (!startTime || !endTime) {
       return NextResponse.json(
-        { error: 'Invalid time format. Use HH:MM in 24-hour format' },
+        { error: 'Invalid time format. Use HH:MM in 24-hour format or 12-hour format (e.g., "3:30 PM")' },
         { status: 400 }
       )
     }
-
-    // Convert times to full time format for database
-    const startTime = body.start_time + ':00'
-    const endTime = body.end_time + ':00'
 
     // Validate that start time is before end time
     if (startTime >= endTime) {

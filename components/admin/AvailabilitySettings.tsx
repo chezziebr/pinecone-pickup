@@ -1680,8 +1680,8 @@ function AddSeasonModal({
             start_date: formData.start_date,
             end_date: formData.end_date,
             day_of_week,
-            start_time: `${formData.start_time}:00`,
-            end_time: `${formData.end_time}:00`,
+            start_time: formData.start_time,
+            end_time: formData.end_time,
             is_active: formData.is_active
           })
         })
@@ -1937,8 +1937,8 @@ function EditSeasonModal({
           start_date: formData.start_date,
           end_date: formData.end_date,
           day_of_week: formData.day_of_week,
-          start_time: `${formData.start_time}:00`,
-          end_time: `${formData.end_time}:00`,
+          start_time: formData.start_time,
+          end_time: formData.end_time,
           is_active: formData.is_active
         })
       })
