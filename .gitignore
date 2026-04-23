@@ -87,3 +87,9 @@ next-env.d.ts
 .tmp/
 temp/
 .temp/
+
+# OAuth token artifacts (never commit these)
+token.json
+tokens.json
+*.refresh-token
+.oauth-tokens/
