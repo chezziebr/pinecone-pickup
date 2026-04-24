@@ -9,7 +9,7 @@ if (!CRON_SECRET) {
   throw new Error('Missing required environment variable: CRON_SECRET must be set')
 }
 
-export async function POST(request: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
     // Verify cron secret
     const authHeader = request.headers.get('authorization')
