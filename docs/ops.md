@@ -130,7 +130,9 @@ Deferred per session scope. Listed here so they don't drift further.
 
 2. **`lib/google-calendar.ts:28-29` constructs event times in server-local time (UTC on Vercel).** Currently writing events at wrong wall-clock times. Every new booking's calendar event appears on the pinecone calendar 7–8 hours off Pacific — e.g., a customer-booked 3:00 PM pickup shows up as an 8:00 AM event for the kids to see. This is Session 3 (timezone bugs) in the followup queue and should be prioritized. Constitution §2.2 violation.
 
-3. **Vercel crons 405-ing.** `/api/reminders` and `/api/review-request` export only `POST`; Vercel Cron sends `GET`. Reminders not being sent; bookings never flip to `completed`; revenue metrics stay at $0. Constitution §5.1 violation.
+3. **Vercel cron GET/POST mismatch — RESOLVED 2026-04-23 (commit d4b6740).** `/api/reminders` and `/api/review-request` previously exported only `POST`; Vercel Cron sends `GET`, so every scheduled tick returned 405. Both handlers renamed to `export async function GET`. Verified at the first 02:00 UTC tick after deploy (2026-04-24 02:00 UTC / 2026-04-23 19:00 PDT): both routes returned 200, Bearer-token auth passing, handler bodies executing. Constitution §5.1 satisfied.
+
+   **Behavioral verification deferred.** The reminder flag flips (`reminder_day_before_sent`, `reminder_hour_before_sent`) and the `status` → `completed` transition will confirm on the first real in-window booking. Deliberately not creating a test booking yet: until Session 3 (timezone bugs — Constitution §2, latent issues #1 and #2 above) lands, any booking's calendar event would be written to the pinecone calendar at the wrong wall-clock time (7–8 hours off), which would mislead the kids. First behavioral verification should ride on a real booking after the timezone fix.
 
 ## Session-preamble cross-reference
 
@@ -144,3 +146,4 @@ When starting a calendar-integration session, pair this doc with:
 | Date | Change |
 |---|---|
 | 2026-04-23 | Initial doc. OAuth app moved to In Production (2026-04-22). Redirect URI `http://127.0.0.1:53682/` added for loopback flow. Both refresh tokens regenerated. `PERSONAL_CALENDAR_IDS` changed from dedicated blockout calendar (now deleted) to `chezziebr@gmail.com`. |
+| 2026-04-23 | Cron GET/POST mismatch fixed (commit d4b6740). `/api/reminders` and `/api/review-request` renamed from `POST` to `GET` handlers; both verified 200 at the 02:00 UTC tick following deploy. Latent issue #3 resolved; behavioral verification (reminder flags flipping on real bookings) deferred until after Session 3 timezone fix. |
