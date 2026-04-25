@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdminAuth, handleRouteError } from '@/lib/auth'
 import { google } from 'googleapis'
+import { pacificDayBounds, pacificToday } from '@/lib/time'
 
 function createOAuthClient(refreshToken: string) {
   const oauth2Client = new google.auth.OAuth2(
@@ -17,7 +18,7 @@ export async function GET(request: NextRequest) {
     requireAdminAuth(request)
 
     const { searchParams } = new URL(request.url)
-    const date = searchParams.get('date') || new Date().toISOString().split('T')[0]
+    const date = searchParams.get('date') || pacificToday()
 
     const results: any = {
       date,
@@ -34,8 +35,7 @@ export async function GET(request: NextRequest) {
     }
 
     const calendar = google.calendar({ version: 'v3' })
-    const startOfDay = new Date(date + 'T00:00:00-07:00')
-    const endOfDay = new Date(date + 'T23:59:59-07:00')
+    const { start: startOfDay, end: endOfDay } = pacificDayBounds(date)
 
     // Test personal calendar
     if (process.env.PERSONAL_GOOGLE_REFRESH_TOKEN && process.env.PERSONAL_CALENDAR_IDS) {
