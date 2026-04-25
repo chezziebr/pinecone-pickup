@@ -9,7 +9,7 @@
 
 **Companion documents.**
 - `DISCOVERY_REPORT.md` — the forensic source material for every rule below.
-- `ARCHITECTURE.md` — what the system is.
+- `docs/ARCHITECTURE.md` — what the system is.
 - `docs/session-preamble.md` — the canonical opening-of-session brief.
 
 ---

@@ -104,10 +104,9 @@ pinecone-pickup/
 ├── SECURITY_GUIDELINES.md            Static guidance doc
 ├── SECURITY_README.md                Credential-hygiene doc
 ├── README.md                         Unmodified create-next-app boilerplate
-├── CLAUDE.md                         One-line @AGENTS.md include
 ├── AGENTS.md                         Next.js-version warning for agents
 ├── DISCOVERY_REPORT.md               Honest inventory of drift (this session)
-├── ARCHITECTURE.md                   This document
+├── docs/ARCHITECTURE.md              This document
 └── CONSTITUTION.md                   Rules going forward
 ```
 

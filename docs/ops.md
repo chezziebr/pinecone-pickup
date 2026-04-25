@@ -139,7 +139,7 @@ Deferred per session scope. Listed here so they don't drift further.
 When starting a calendar-integration session, pair this doc with:
 - `docs/session-preamble.md` — canonical session brief.
 - `CONSTITUTION.md` §1 (availability correctness), §6.2 (this doc's own rule).
-- `ARCHITECTURE.md` §4 (data model), §5 (availability pipeline).
+- `docs/ARCHITECTURE.md` §4 (data model), §5 (availability pipeline).
 
 ## Changelog
 

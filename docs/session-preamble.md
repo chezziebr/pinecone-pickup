@@ -14,7 +14,7 @@ Paste this at the top of a new Claude Code session for this app. Fill in `{{ SES
 
 Three docs in the repo carry the state of the system. Read in this order when context matters:
 
-- `ARCHITECTURE.md` — what the system is.
+- `docs/ARCHITECTURE.md` — what the system is.
 - `CONSTITUTION.md` — the rules we enforce + a grep test for each.
 - `DISCOVERY_REPORT.md` — the forensic source material that produced both.
 
