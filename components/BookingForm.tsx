@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { pacificToday } from '@/lib/time'
 
 interface AvailabilityResponse {
   dates?: string[]
@@ -102,12 +103,12 @@ export default function BookingForm() {
     startDate.setDate(startDate.getDate() - firstDay.getDay())
 
     const days = []
-    const today = new Date().toISOString().split('T')[0]
+    const today = pacificToday()
 
     for (let i = 0; i < 42; i++) {
       const date = new Date(startDate)
       date.setDate(startDate.getDate() + i)
-      const dateStr = date.toISOString().split('T')[0]
+      const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
       const isCurrentMonth = date.getMonth() === month
       const isPast = dateStr < today
       const isAvailable = availableDates.includes(dateStr)

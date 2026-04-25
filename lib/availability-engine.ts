@@ -2,6 +2,7 @@
 import { supabaseAdmin } from './supabase'
 import { google } from 'googleapis'
 import { AvailabilitySetting, AvailabilityException, convertTo12Hour } from './types'
+import { loadServiceDurationMinutes, pacificDateAtSlot, pacificDayBounds } from './time'
 
 // Default buffer in minutes (used if no setting found in DB)
 const DEFAULT_BUFFER_MINUTES = 15
@@ -134,23 +135,22 @@ export async function getAvailabilityData(date: string): Promise<{
     const pineconeAuth = createOAuthClient(process.env.PINECONE_GOOGLE_REFRESH_TOKEN!)
     const calendar = google.calendar({ version: 'v3' })
 
-    const startOfDay = new Date(date + 'T00:00:00')
-    const endOfDay = new Date(date + 'T23:59:59')
+    const { start: dayStart, end: dayEnd } = pacificDayBounds(date)
 
     const [personalEvents, pineconeEvents] = await Promise.all([
       calendar.events.list({
         auth: personalAuth,
         calendarId: process.env.PERSONAL_CALENDAR_IDS!,
-        timeMin: startOfDay.toISOString(),
-        timeMax: endOfDay.toISOString(),
+        timeMin: dayStart.toISOString(),
+        timeMax: dayEnd.toISOString(),
         singleEvents: true,
         orderBy: 'startTime',
       }),
       calendar.events.list({
         auth: pineconeAuth,
         calendarId: process.env.PINECONE_CALENDAR_ID!,
-        timeMin: startOfDay.toISOString(),
-        timeMax: endOfDay.toISOString(),
+        timeMin: dayStart.toISOString(),
+        timeMax: dayEnd.toISOString(),
         singleEvents: true,
         orderBy: 'startTime',
       })
@@ -375,23 +375,11 @@ async function filterGoogleCalendarConflicts(
   googleEvents: any[]
 ): Promise<string[]> {
   const bufferMinutes = await getBufferMinutes()
+  const durationMs = (await loadServiceDurationMinutes()) * 60 * 1000
 
   return slots.filter(slot => {
-    // Convert slot time to Date object
-    const [timeStr, period] = slot.split(' ')
-    const [hours, minutes] = timeStr.split(':').map(Number)
-    let hour24 = hours
-
-    if (period === 'PM' && hours !== 12) hour24 += 12
-    if (period === 'AM' && hours === 12) hour24 = 0
-
-    // Use explicit timezone-aware date construction
-    const slotStart = new Date(`${date}T${hour24.toString().padStart(2, '0')}:${(minutes || 0).toString().padStart(2, '0')}:00-07:00`)
-
-    // Assume 90 minutes duration for service (matching existing logic)
-    const slotEnd = new Date(slotStart.getTime() + (90 * 60 * 1000))
-
-    // Check if this slot conflicts with any Google Calendar events
+    const slotStart = pacificDateAtSlot(date, slot)
+    const slotEnd = new Date(slotStart.getTime() + durationMs)
     return !hasGoogleCalendarConflict(slotStart, slotEnd, googleEvents, bufferMinutes)
   })
 }

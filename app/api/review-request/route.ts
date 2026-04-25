@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { sendReviewRequest } from '@/lib/sendgrid'
+import { loadBusinessTimezone, loadServiceDurationMinutes, pacificDateAtSlot } from '@/lib/time'
 
 // Require CRON_SECRET - no fallback for security
 const CRON_SECRET = process.env.CRON_SECRET
@@ -28,7 +29,8 @@ export async function GET(request: NextRequest) {
     }
 
     const now = new Date()
-    const losAngelesTime = new Date(now.toLocaleString("en-US", {timeZone: "America/Los_Angeles"}))
+    const tz = await loadBusinessTimezone()
+    const durationMs = (await loadServiceDurationMinutes()) * 60 * 1000
 
     let sent = 0
 
@@ -50,22 +52,13 @@ export async function GET(request: NextRequest) {
 
       if (completedBookings) {
         for (const booking of completedBookings) {
-          // Parse booking time and calculate end time
-          const [time, period] = booking.scheduled_time.split(' ')
-          const [hours, minutes] = time.split(':').map(Number)
-          let hour24 = hours
-          if (period === 'PM' && hours !== 12) hour24 += 12
-          if (period === 'AM' && hours === 12) hour24 = 0
+          const bookingDateTime = pacificDateAtSlot(booking.scheduled_date, booking.scheduled_time, tz)
 
-          const bookingDateTime = new Date(booking.scheduled_date + 'T00:00:00')
-          bookingDateTime.setHours(hour24, minutes || 0, 0, 0)
-
-          // Add 90 minutes for service duration + 2 hours buffer
-          const serviceEndTime = new Date(bookingDateTime.getTime() + (90 * 60 * 1000))
+          // Service end + 2-hour buffer before sending the review request
+          const serviceEndTime = new Date(bookingDateTime.getTime() + durationMs)
           const reviewThreshold = new Date(serviceEndTime.getTime() + (2 * 60 * 60 * 1000))
 
-          // Check if enough time has passed since service completion
-          if (losAngelesTime >= reviewThreshold) {
+          if (now >= reviewThreshold) {
             try {
               await sendReviewRequest(booking)
 

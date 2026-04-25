@@ -1,5 +1,7 @@
 // Comprehensive input validation utilities
 
+import { pacificAddDays, pacificToday } from './time'
+
 export interface BookingData {
   first_name: string
   last_name: string
@@ -154,13 +156,12 @@ export function validateBookingData(data: any): ValidationResult<BookingData> {
   } else if (!PATTERNS.DATE.test(data.scheduled_date)) {
     errors.scheduled_date = 'Please enter a valid date (YYYY-MM-DD)'
   } else {
-    const scheduledDate = new Date(data.scheduled_date)
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
+    const todayStr = pacificToday()
+    const oneYearOutStr = pacificAddDays(todayStr, 365)
 
-    if (scheduledDate < today) {
+    if (data.scheduled_date < todayStr) {
       errors.scheduled_date = 'Cannot schedule bookings in the past'
-    } else if (scheduledDate.getTime() > today.getTime() + (365 * 24 * 60 * 60 * 1000)) {
+    } else if (data.scheduled_date > oneYearOutStr) {
       errors.scheduled_date = 'Cannot schedule bookings more than 1 year in advance'
     } else {
       sanitized.scheduled_date = data.scheduled_date

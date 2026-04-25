@@ -1,5 +1,11 @@
 import { google } from 'googleapis'
 import { BookingData } from './availability'
+import {
+  DEFAULT_SERVICE_DURATION_MINUTES,
+  loadBusinessTimezone,
+  loadServiceDurationMinutes,
+  pacificDateAtSlot,
+} from './time'
 
 // Helper to create OAuth2 clients
 function createOAuthClient(refreshToken: string) {
@@ -16,29 +22,15 @@ function createOAuthClient(refreshToken: string) {
   return oauth2Client
 }
 
-// Helper to parse time string to Date object
-function parseTimeToDate(date: string, timeString: string): Date {
-  const [time, period] = timeString.split(' ')
-  const [hours, minutes] = time.split(':').map(Number)
-
-  let hour24 = hours
-  if (period === 'PM' && hours !== 12) hour24 += 12
-  if (period === 'AM' && hours === 12) hour24 = 0
-
-  const dateObj = new Date(date + 'T00:00:00')
-  dateObj.setHours(hour24, minutes || 0, 0, 0)
-
-  return dateObj
-}
-
 // Helper to check if a time slot conflicts with existing events
 function hasTimeConflict(slotTime: Date, events: any[]): boolean {
+  const durationMs = DEFAULT_SERVICE_DURATION_MINUTES * 60 * 1000
   const slotStart = new Date(slotTime)
-  const slotEnd = new Date(slotTime.getTime() + (90 * 60 * 1000)) // 1.5 hours
+  const slotEnd = new Date(slotTime.getTime() + durationMs)
 
-  // Check ±1.5 hours buffer
-  const bufferStart = new Date(slotStart.getTime() - (90 * 60 * 1000))
-  const bufferEnd = new Date(slotEnd.getTime() + (90 * 60 * 1000))
+  // ±duration buffer
+  const bufferStart = new Date(slotStart.getTime() - durationMs)
+  const bufferEnd = new Date(slotEnd.getTime() + durationMs)
 
   return events.some(event => {
     if (!event.start?.dateTime || !event.end?.dateTime) return false
@@ -65,7 +57,7 @@ export async function getAvailableDates(year: number, month: number): Promise<st
 
     for (let day = 1; day <= daysInMonth; day++) {
       const date = new Date(year, month - 1, day)
-      const dateString = date.toISOString().split('T')[0]
+      const dateString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 
       // Skip past dates
       if (date < today) continue
@@ -95,9 +87,11 @@ export async function createBookingEvent(booking: BookingData): Promise<string> 
     const pineconeAuth = createOAuthClient(process.env.PINECONE_GOOGLE_REFRESH_TOKEN!)
     const calendar = google.calendar({ version: 'v3' })
 
-    // Parse the scheduled time
-    const startTime = parseTimeToDate(booking.scheduled_date, booking.scheduled_time)
-    const endTime = new Date(startTime.getTime() + (90 * 60 * 1000)) // 1.5 hours
+    const tz = await loadBusinessTimezone()
+    const durationMs = (await loadServiceDurationMinutes()) * 60 * 1000
+
+    const startTime = pacificDateAtSlot(booking.scheduled_date, booking.scheduled_time, tz)
+    const endTime = new Date(startTime.getTime() + durationMs)
 
     const event = {
       summary: `Pinecone Pick Up — ${booking.first_name} ${booking.last_name}`,
@@ -112,11 +106,11 @@ export async function createBookingEvent(booking: BookingData): Promise<string> 
       ].filter(Boolean).join('\n'),
       start: {
         dateTime: startTime.toISOString(),
-        timeZone: 'America/Los_Angeles',
+        timeZone: tz,
       },
       end: {
         dateTime: endTime.toISOString(),
-        timeZone: 'America/Los_Angeles',
+        timeZone: tz,
       },
     }
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { sendDayBeforeReminder, sendHourBeforeReminder } from '@/lib/sendgrid'
+import { loadBusinessTimezone, pacificAddDays, pacificDateAtSlot, pacificToday } from '@/lib/time'
 
 // Require CRON_SECRET - no fallback for security
 const CRON_SECRET = process.env.CRON_SECRET
@@ -27,13 +28,9 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    const tz = await loadBusinessTimezone()
     const now = new Date()
-    const losAngelesTime = new Date(now.toLocaleString("en-US", {timeZone: "America/Los_Angeles"}))
-
-    // Calculate tomorrow's date in LA timezone
-    const tomorrow = new Date(losAngelesTime)
-    tomorrow.setDate(tomorrow.getDate() + 1)
-    const tomorrowDateStr = tomorrow.toISOString().split('T')[0]
+    const tomorrowDateStr = pacificAddDays(pacificToday(tz), 1, tz)
 
     let dayBeforeSent = 0
     let hourBeforeSent = 0
@@ -73,7 +70,7 @@ export async function GET(request: NextRequest) {
     // 1-hour before reminders
     try {
       // Get bookings scheduled between now and 70 minutes from now
-      const hourFromNow = new Date(losAngelesTime.getTime() + (70 * 60 * 1000))
+      const hourFromNow = new Date(now.getTime() + (70 * 60 * 1000))
 
       const { data: hourBeforeBookings, error: hourBeforeError } = await supabaseAdmin
         .from('bookings')
@@ -86,18 +83,10 @@ export async function GET(request: NextRequest) {
         console.error('Error fetching hour-before bookings:', hourBeforeError)
       } else if (hourBeforeBookings) {
         for (const booking of hourBeforeBookings) {
-          // Parse booking time in LA timezone
-          const [time, period] = booking.scheduled_time.split(' ')
-          const [hours, minutes] = time.split(':').map(Number)
-          let hour24 = hours
-          if (period === 'PM' && hours !== 12) hour24 += 12
-          if (period === 'AM' && hours === 12) hour24 = 0
-
-          const bookingDateTime = new Date(booking.scheduled_date + 'T00:00:00')
-          bookingDateTime.setHours(hour24, minutes || 0, 0, 0)
+          const bookingDateTime = pacificDateAtSlot(booking.scheduled_date, booking.scheduled_time, tz)
 
           // Check if booking is within the next 70 minutes
-          if (bookingDateTime >= losAngelesTime && bookingDateTime <= hourFromNow) {
+          if (bookingDateTime >= now && bookingDateTime <= hourFromNow) {
             try {
               await sendHourBeforeReminder(booking)
 

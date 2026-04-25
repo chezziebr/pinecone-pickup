@@ -18,20 +18,14 @@ export type BookingData = {
 // Use the enhanced business hours validation from availability engine
 export { validateBusinessHoursDatabase as validateBusinessHours } from './availability-engine'
 
-export function validateFutureDate(date: string): boolean {
-  const scheduleDate = new Date(date)
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
+import { pacificAddDays, pacificToday } from './time'
 
-  return scheduleDate >= today
+export function validateFutureDate(date: string): boolean {
+  return date >= pacificToday()
 }
 
 export function validateReasonableAdvanceBooking(date: string): boolean {
-  const scheduleDate = new Date(date)
-  const today = new Date()
-  const maxAdvance = new Date(today.getTime() + (365 * 24 * 60 * 60 * 1000)) // 1 year
-
-  return scheduleDate <= maxAdvance
+  return date <= pacificAddDays(pacificToday(), 365)
 }
 
 export function isValidServiceForDate(date: string, service_type: string): boolean {
