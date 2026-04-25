@@ -32,16 +32,11 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
 
 # security & credentials
 *.key
 *.p12
 *.pfx
-*.pem
 *credentials*.json
 *config*.json
 secrets.json
@@ -68,7 +63,6 @@ logs/
 *~
 
 # OS generated files
-.DS_Store
 .DS_Store?
 ._*
 .Spotlight-V100
@@ -93,3 +87,6 @@ token.json
 tokens.json
 *.refresh-token
 .oauth-tokens/
+
+# Claude Code harness state
+.claude/
