@@ -1,5 +1,6 @@
 import sgMail from '@sendgrid/mail'
 import { BookingData } from './availability'
+import { formatPacificDate } from './time'
 
 // Initialize SendGrid
 sgMail.setApiKey(process.env.SENDGRID_API_KEY!)
@@ -67,7 +68,7 @@ const emailStyles = `
 export async function sendConfirmationEmail(booking: BookingData) {
   try {
     const serviceType = booking.service_type === 'pickup_only' ? 'Pick Up Only' : 'Pick Up + Haul Away'
-    const formattedDate = new Date(booking.scheduled_date).toLocaleDateString('en-US', {
+    const formattedDate = formatPacificDate(booking.scheduled_date, {
       weekday: 'long',
       year: 'numeric',
       month: 'long',
@@ -124,7 +125,7 @@ export async function sendConfirmationEmail(booking: BookingData) {
 
 export async function sendDayBeforeReminder(booking: BookingData) {
   try {
-    const formattedDate = new Date(booking.scheduled_date).toLocaleDateString('en-US', {
+    const formattedDate = formatPacificDate(booking.scheduled_date, {
       weekday: 'long',
       month: 'long',
       day: 'numeric',

@@ -54,6 +54,23 @@ export function pacificAddDays(
   return `${yy}-${mm}-${dd}`
 }
 
+// Format a YYYY-MM-DD string for display in the given timezone. Solves the
+// `new Date('2026-04-26').toLocaleDateString(...)` bug: that pattern parses
+// the string as UTC midnight and then formats in the runtime's local
+// timezone, which displays the previous day for any user west of UTC.
+// Each call site passes its own Intl.DateTimeFormatOptions to keep its
+// preferred display format.
+export function formatPacificDate(
+  dateStr: string,
+  options: Intl.DateTimeFormatOptions,
+  tz: string = DEFAULT_BUSINESS_TIMEZONE,
+): string {
+  return pacificDayBounds(dateStr, tz).start.toLocaleDateString('en-US', {
+    ...options,
+    timeZone: tz,
+  })
+}
+
 function parseSlot(slotStr: string): { hours: number; minutes: number } {
   const match = slotStr.trim().match(/^(1[0-2]|[1-9]):([0-5][0-9])\s*(AM|PM)$/i)
   if (!match) {

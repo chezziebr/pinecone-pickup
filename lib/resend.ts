@@ -1,5 +1,6 @@
 import { Resend } from 'resend'
 import { BookingData } from './availability'
+import { formatPacificDate } from './time'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev'
@@ -66,7 +67,7 @@ const emailStyles = `
 export async function sendConfirmationEmail(booking: BookingData) {
   try {
     const serviceType = booking.service_type === 'pickup_only' ? 'Pick Up Only' : 'Pick Up + Haul Away'
-    const formattedDate = new Date(booking.scheduled_date).toLocaleDateString('en-US', {
+    const formattedDate = formatPacificDate(booking.scheduled_date, {
       weekday: 'long',
       year: 'numeric',
       month: 'long',
@@ -120,7 +121,7 @@ export async function sendConfirmationEmail(booking: BookingData) {
 
 export async function sendDayBeforeReminder(booking: BookingData) {
   try {
-    const formattedDate = new Date(booking.scheduled_date).toLocaleDateString('en-US', {
+    const formattedDate = formatPacificDate(booking.scheduled_date, {
       weekday: 'long',
       month: 'long',
       day: 'numeric',

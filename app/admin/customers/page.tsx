@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { formatPacificDate } from '@/lib/time'
 
 interface Customer {
   id: string
@@ -97,7 +98,7 @@ export default function CustomersPage() {
   }
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+    return formatPacificDate(dateString, {
       month: 'short',
       day: 'numeric',
       year: 'numeric'

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import AvailabilitySettings from '@/components/admin/AvailabilitySettings'
+import { formatPacificDate } from '@/lib/time'
 
 interface DashboardStats {
   totalBookings: number
@@ -93,7 +94,7 @@ export default function AdminDashboard() {
   }
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+    return formatPacificDate(dateString, {
       month: 'short',
       day: 'numeric',
       year: 'numeric'

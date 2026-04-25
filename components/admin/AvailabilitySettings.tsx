@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { formatPacificDate } from '@/lib/time'
 import {
   AvailabilitySetting,
   AvailabilityException,
@@ -595,7 +596,7 @@ function SpecialDatesView({
             }`} />
             <div>
               <div className="font-medium">
-                {new Date(exception.specific_date).toLocaleDateString('en-US', {
+                {formatPacificDate(exception.specific_date, {
                   weekday: 'long',
                   year: 'numeric',
                   month: 'long',

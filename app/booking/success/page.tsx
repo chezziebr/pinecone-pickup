@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
+import { formatPacificDate } from '@/lib/time'
 
 function BookingSuccessContent() {
   const searchParams = useSearchParams()
@@ -14,7 +15,7 @@ function BookingSuccessContent() {
   const address = searchParams.get('address') || ''
 
   // Format the date
-  const formattedDate = date ? new Date(date).toLocaleDateString('en-US', {
+  const formattedDate = date ? formatPacificDate(date, {
     weekday: 'long',
     year: 'numeric',
     month: 'long',

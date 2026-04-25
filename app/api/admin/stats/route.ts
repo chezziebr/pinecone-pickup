@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAdminAuth, handleRouteError } from '@/lib/auth'
+import { formatPacificDate } from '@/lib/time'
 
 export async function GET(request: NextRequest) {
   try {
@@ -79,7 +80,7 @@ export async function GET(request: NextRequest) {
 
     // Find busiest day of the week
     const dayOfWeekCounts = bookings?.reduce((acc: Record<string, number>, booking) => {
-      const day = new Date(booking.scheduled_date).toLocaleDateString('en-US', { weekday: 'long' })
+      const day = formatPacificDate(booking.scheduled_date, { weekday: 'long' })
       acc[day] = (acc[day] || 0) + 1
       return acc
     }, {}) || {}

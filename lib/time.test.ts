@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   DEFAULT_BUSINESS_TIMEZONE,
   DEFAULT_SERVICE_DURATION_MINUTES,
+  formatPacificDate,
   pacificAddDays,
   pacificDateAtSlot,
   pacificDayBounds,
@@ -79,6 +80,51 @@ describe('pacificDayBounds', () => {
     const { start, end } = pacificDayBounds('2026-12-15')
     expect(start.toISOString()).toBe('2026-12-15T08:00:00.000Z')
     expect(end.toISOString()).toBe('2026-12-16T08:00:00.000Z')
+  })
+})
+
+describe('formatPacificDate', () => {
+  it('renders PDT date with full long format (success/email format)', () => {
+    expect(
+      formatPacificDate('2026-04-26', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      }),
+    ).toBe('Sunday, April 26, 2026')
+  })
+
+  it('renders PDT date with short format (dashboard format)', () => {
+    expect(
+      formatPacificDate('2026-04-26', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      }),
+    ).toBe('Apr 26, 2026')
+  })
+
+  it('renders PST date correctly (no DST drift)', () => {
+    expect(
+      formatPacificDate('2026-12-15', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      }),
+    ).toBe('Tuesday, December 15, 2026')
+  })
+
+  it('returns the same Pacific calendar day regardless of caller timezone', () => {
+    // Simulate caller in UTC: even at the moment that's "April 25 17:00 PDT"
+    // (the time when naive new Date('2026-04-26') -> Pacific renders as
+    // April 25), formatPacificDate must still return April 26.
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-04-26T00:00:00Z'))
+    expect(
+      formatPacificDate('2026-04-26', { month: 'short', day: 'numeric', year: 'numeric' }),
+    ).toBe('Apr 26, 2026')
   })
 })
 
