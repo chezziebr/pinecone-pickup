@@ -90,3 +90,6 @@ tokens.json
 
 # Claude Code harness state
 .claude/
+
+# .env*.local — added by `vercel env pull`, kept for tooling compatibility (already covered by .env* above)
+.env*.local
