@@ -103,7 +103,9 @@ export async function POST(request: NextRequest) {
       reminder_day_before_sent: false,
       reminder_hour_before_sent: false,
       review_request_sent: false,
-      google_event_id: null
+      google_event_id: null,
+      calendar_sync_status: 'pending' as const,
+      confirmation_email_sent_at: null
     }
 
     // Insert booking into Supabase
@@ -123,24 +125,65 @@ export async function POST(request: NextRequest) {
     try {
       const googleEventId = await createBookingEvent(bookingData)
 
-      // Update booking with Google event ID
-      await supabaseAdmin
+      const { error: updateError } = await supabaseAdmin
         .from('bookings')
-        .update({ google_event_id: googleEventId })
+        .update({
+          google_event_id: googleEventId,
+          calendar_sync_status: 'success'
+        })
         .eq('id', bookingId)
+
+      if (updateError) {
+        console.error('[booking] calendar_status_update failed', {
+          bookingId,
+          attempted_status: 'success',
+          error: updateError.message,
+        })
+      }
 
       ;(bookingData as any).google_event_id = googleEventId
     } catch (eventError) {
-      console.error('Calendar event error:', eventError)
-      // Continue with booking even if calendar event fails
+      console.error('[booking] calendar_event_creation failed', {
+        bookingId,
+        error: eventError instanceof Error ? eventError.message : String(eventError),
+        stack: eventError instanceof Error ? eventError.stack : undefined,
+      })
+
+      const { error: updateError } = await supabaseAdmin
+        .from('bookings')
+        .update({ calendar_sync_status: 'failed' })
+        .eq('id', bookingId)
+
+      if (updateError) {
+        console.error('[booking] calendar_status_update failed', {
+          bookingId,
+          attempted_status: 'failed',
+          error: updateError.message,
+        })
+      }
     }
 
     // Send confirmation email
     try {
       await sendConfirmationEmail(bookingData)
+
+      const { error: updateError } = await supabaseAdmin
+        .from('bookings')
+        .update({ confirmation_email_sent_at: new Date().toISOString() })
+        .eq('id', bookingId)
+
+      if (updateError) {
+        console.error('[booking] email_status_update failed', {
+          bookingId,
+          error: updateError.message,
+        })
+      }
     } catch (emailError) {
-      console.error('Email error:', emailError)
-      // Continue with booking even if email fails
+      console.error('[booking] confirmation_email failed', {
+        bookingId,
+        error: emailError instanceof Error ? emailError.message : String(emailError),
+        stack: emailError instanceof Error ? emailError.stack : undefined,
+      })
     }
 
     return NextResponse.json({
