@@ -3,18 +3,19 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { sendReviewRequest } from '@/lib/sendgrid'
 import { loadBusinessTimezone, loadServiceDurationMinutes, pacificDateAtSlot } from '@/lib/time'
 
-// Require CRON_SECRET - no fallback for security
-const CRON_SECRET = process.env.CRON_SECRET
-
-if (!CRON_SECRET) {
-  throw new Error('Missing required environment variable: CRON_SECRET must be set')
-}
-
 export async function GET(request: NextRequest) {
   try {
-    // Verify cron secret
+    const cronSecret = process.env.CRON_SECRET
+    if (!cronSecret) {
+      console.error('CRON_SECRET not configured')
+      return NextResponse.json(
+        { error: 'CRON_SECRET not configured' },
+        { status: 503 }
+      )
+    }
+
     const authHeader = request.headers.get('authorization')
-    const expectedAuth = `Bearer ${CRON_SECRET}`
+    const expectedAuth = `Bearer ${cronSecret}`
 
     if (!authHeader || authHeader !== expectedAuth) {
       console.warn('Unauthorized cron request attempt:', {
