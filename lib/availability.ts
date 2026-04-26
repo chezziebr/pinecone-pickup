@@ -34,18 +34,3 @@ export function isValidServiceForDate(date: string, service_type: string): boole
   return ['pickup_only', 'pickup_haul'].includes(service_type)
 }
 
-export function calculateServiceDuration(service_type: string, lot_size: string): number {
-  // Base duration in minutes
-  const baseDuration = service_type === 'pickup_only' ? 60 : 90
-
-  // Lot size multipliers
-  const sizeMultipliers: Record<string, number> = {
-    '¼ acre': 1,
-    '½ acre': 1.2,
-    '¾ acre': 1.5,
-    '1 acre+': 2
-  }
-
-  const multiplier = sizeMultipliers[lot_size] || 1
-  return Math.ceil(baseDuration * multiplier)
-}

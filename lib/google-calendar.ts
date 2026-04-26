@@ -1,7 +1,6 @@
 import { google } from 'googleapis'
 import { BookingData } from './availability'
 import {
-  DEFAULT_SERVICE_DURATION_MINUTES,
   loadBusinessTimezone,
   loadServiceDurationMinutes,
   pacificDateAtSlot,
@@ -20,27 +19,6 @@ function createOAuthClient(refreshToken: string) {
   })
 
   return oauth2Client
-}
-
-// Helper to check if a time slot conflicts with existing events
-function hasTimeConflict(slotTime: Date, events: any[]): boolean {
-  const durationMs = DEFAULT_SERVICE_DURATION_MINUTES * 60 * 1000
-  const slotStart = new Date(slotTime)
-  const slotEnd = new Date(slotTime.getTime() + durationMs)
-
-  // ±duration buffer
-  const bufferStart = new Date(slotStart.getTime() - durationMs)
-  const bufferEnd = new Date(slotEnd.getTime() + durationMs)
-
-  return events.some(event => {
-    if (!event.start?.dateTime || !event.end?.dateTime) return false
-
-    const eventStart = new Date(event.start.dateTime)
-    const eventEnd = new Date(event.end.dateTime)
-
-    // Check if event overlaps with buffered slot time
-    return eventStart < bufferEnd && eventEnd > bufferStart
-  })
 }
 
 // Use the enhanced availability engine instead of hardcoded logic
