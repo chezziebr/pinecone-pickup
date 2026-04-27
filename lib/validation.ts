@@ -210,6 +210,79 @@ export function validateBookingData(data: any): ValidationResult<BookingData> {
   }
 }
 
+export interface PostServiceData {
+  actual_lot_size?: string
+  payment_received: boolean
+  payment_method?: string
+  tip_amount?: number
+  completion_notes?: string
+}
+
+const PAYMENT_METHODS = ['cash', 'venmo', 'check', 'other']
+
+export function validatePostServiceData(data: any): ValidationResult<PostServiceData> {
+  const errors: Record<string, string> = {}
+  const sanitized: Partial<PostServiceData> = {}
+
+  // payment_received: required boolean
+  if (typeof data.payment_received !== 'boolean') {
+    errors.payment_received = 'Payment received is required'
+  } else {
+    sanitized.payment_received = data.payment_received
+  }
+
+  // payment_method: required if payment_received=true; rejected if payment_received=false
+  if (sanitized.payment_received === true) {
+    if (!data.payment_method || typeof data.payment_method !== 'string') {
+      errors.payment_method = 'Payment method is required when payment was received'
+    } else if (!PAYMENT_METHODS.includes(data.payment_method)) {
+      errors.payment_method = 'Invalid payment method'
+    } else {
+      sanitized.payment_method = data.payment_method
+    }
+  } else if (sanitized.payment_received === false && data.payment_method) {
+    errors.payment_method = 'Payment method must not be set when no payment was received'
+  }
+
+  // tip_amount: optional integer >= 0; rejected (>0) if payment_received=false
+  if (data.tip_amount !== undefined && data.tip_amount !== null && data.tip_amount !== '') {
+    if (!Number.isInteger(data.tip_amount) || data.tip_amount < 0) {
+      errors.tip_amount = 'Tip must be a whole number ≥ 0'
+    } else if (sanitized.payment_received === false && data.tip_amount > 0) {
+      errors.tip_amount = 'Tip must be 0 or empty when no payment was received'
+    } else {
+      sanitized.tip_amount = data.tip_amount
+    }
+  }
+
+  // actual_lot_size: optional, must be in enum
+  if (data.actual_lot_size !== undefined && data.actual_lot_size !== null && data.actual_lot_size !== '') {
+    if (!ALLOWED_VALUES.LOT_SIZES.includes(data.actual_lot_size)) {
+      errors.actual_lot_size = 'Invalid lot size'
+    } else {
+      sanitized.actual_lot_size = data.actual_lot_size
+    }
+  }
+
+  // completion_notes: optional, sanitized
+  if (data.completion_notes !== undefined && data.completion_notes !== null) {
+    if (typeof data.completion_notes !== 'string') {
+      errors.completion_notes = 'Completion notes must be text'
+    } else {
+      const sanitizedNotes = sanitizeString(data.completion_notes, 1000)
+      if (sanitizedNotes.length > 0) {
+        sanitized.completion_notes = sanitizedNotes
+      }
+    }
+  }
+
+  return {
+    isValid: Object.keys(errors).length === 0,
+    errors,
+    sanitizedData: sanitized
+  }
+}
+
 export interface AdminBookingUpdate {
   id: string
   status?: string
