@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { pacificToday } from '@/lib/time'
+import { WAIVER_TEXT } from '@/lib/constants'
 
 interface AvailabilityResponse {
   dates?: string[]
@@ -34,6 +35,7 @@ export default function BookingForm() {
   })
 
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [waiverAccepted, setWaiverAccepted] = useState(false)
 
   // Fetch available dates for the current month
   const fetchAvailableDates = async (date: Date) => {
@@ -168,7 +170,10 @@ export default function BookingForm() {
       const response = await fetch('/api/book', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify({
+          ...formData,
+          waiver_accepted_at: waiverAccepted ? new Date().toISOString() : undefined
+        })
       })
 
       const result = await response.json()
@@ -464,11 +469,34 @@ export default function BookingForm() {
             </label>
           </div>
 
+          {/* Liability Waiver */}
+          <div className="mb-8">
+            <h3 className="text-lg font-semibold text-pine mb-3">Liability Waiver</h3>
+            <div className="border border-gray-300 rounded-lg p-4 mb-4">
+              {WAIVER_TEXT.split('\n\n').map((paragraph, i, arr) => (
+                <p key={i} className={`text-sm text-gray-700 ${i < arr.length - 1 ? 'mb-3' : ''}`}>
+                  {paragraph}
+                </p>
+              ))}
+            </div>
+            <label className="flex items-start">
+              <input
+                type="checkbox"
+                checked={waiverAccepted}
+                onChange={(e) => setWaiverAccepted(e.target.checked)}
+                className="mr-3 mt-1"
+              />
+              <span className="text-sm text-gray-700">
+                I have read and agree to the liability waiver above.
+              </span>
+            </label>
+          </div>
+
           {/* Submit */}
           <button
             type="submit"
-            disabled={submitting}
-            className="w-full bg-orange hover:bg-orange/90 disabled:bg-orange/50 text-white p-4 rounded-full font-medium text-lg transition-colors"
+            disabled={submitting || !waiverAccepted}
+            className="w-full bg-orange hover:bg-orange/90 disabled:bg-orange/50 disabled:cursor-not-allowed text-white p-4 rounded-full font-medium text-lg transition-colors"
           >
             {submitting ? 'Confirming Booking...' : 'Confirm Booking →'}
           </button>

@@ -105,7 +105,8 @@ export async function POST(request: NextRequest) {
       review_request_sent: false,
       google_event_id: null,
       calendar_sync_status: 'pending' as const,
-      confirmation_email_sent_at: null
+      confirmation_email_sent_at: null,
+      waiver_accepted_at: sanitizedData.waiver_accepted_at!
     }
 
     // Insert booking into Supabase

@@ -14,6 +14,7 @@ export interface BookingData {
   scheduled_time: string
   notes?: string
   reminders_opted_in?: boolean
+  waiver_accepted_at: string
 }
 
 export interface ValidationResult<T = any> {
@@ -29,7 +30,8 @@ const PATTERNS = {
   NAME: /^[a-zA-Z\s\-'\.]{1,50}$/,
   DATE: /^\d{4}-\d{2}-\d{2}$/,
   TIME: /^(1[0-2]|[1-9]):[0-5]\d\s?(AM|PM)$/,
-  UUID: /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+  UUID: /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+  ISO_TIMESTAMP: /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?(Z|[+-]\d{2}:\d{2})$/
 }
 
 const ALLOWED_VALUES = {
@@ -190,6 +192,15 @@ export function validateBookingData(data: any): ValidationResult<BookingData> {
   // Reminders opt-in validation (optional)
   if (data.reminders_opted_in !== undefined) {
     sanitized.reminders_opted_in = Boolean(data.reminders_opted_in)
+  }
+
+  // Waiver acceptance validation (required)
+  if (!data.waiver_accepted_at || typeof data.waiver_accepted_at !== 'string') {
+    errors.waiver_accepted_at = 'Liability waiver must be accepted to book'
+  } else if (!PATTERNS.ISO_TIMESTAMP.test(data.waiver_accepted_at) || isNaN(Date.parse(data.waiver_accepted_at))) {
+    errors.waiver_accepted_at = 'Invalid waiver acceptance timestamp'
+  } else {
+    sanitized.waiver_accepted_at = data.waiver_accepted_at
   }
 
   return {

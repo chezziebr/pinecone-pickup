@@ -1,0 +1,3 @@
+export const WAIVER_TEXT = `By booking this service, I understand and agree that Pinecone Pick Up Crew is operated by minors under adult supervision. I accept the standard risks of yard cleanup work being performed on my property, including the use of rakes, leaf bags, and hand tools. I confirm that the property information I have provided (address, lot size, service type) is accurate, and that the work area is reasonably safe for the crew to access.
+
+I agree to release Pinecone Pick Up Crew, its operators, and the supervising adult from liability for incidental damage to landscaping or property that may occur during normal cleanup work. I understand that significant pre-existing damage or hazards on my property are my responsibility to disclose in advance.`
