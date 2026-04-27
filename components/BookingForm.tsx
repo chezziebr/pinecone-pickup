@@ -338,8 +338,8 @@ export default function BookingForm() {
                 className={`w-full p-3 border rounded-lg ${errors.service_type ? 'border-red-500' : 'border-gray-300'}`}
               >
                 <option value="">Select service</option>
-                <option value="pickup_only">Pick Up Only ($20/¼ acre)</option>
-                <option value="pickup_haul">Pick Up + Haul Away (+$20 flat)</option>
+                <option value="pickup_only">Pick Up Only</option>
+                <option value="pickup_haul">Pick Up + Haul Away</option>
               </select>
               {errors.service_type && <p className="text-red-500 text-sm mt-1">{errors.service_type}</p>}
             </div>

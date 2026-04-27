@@ -58,7 +58,8 @@ export default function Pricing() {
             </h3>
             <div className="text-4xl font-fraunces font-bold text-pine mb-4">
               $20<span className="text-lg font-normal text-gray-500">/¼ acre</span>
-              <div className="text-lg font-normal text-gray-500 mt-1">+ $20 flat haul-away</div>
+              <div className="text-lg font-normal text-gray-500 mt-1">+ $20 FLAT FEE*</div>
+              <div className="text-xs font-normal text-gray-500 mt-1">*regardless of property size</div>
             </div>
             <p className="text-gray-600 mb-6">
               Complete service — we collect the pinecones and take them away. Zero work for you!
