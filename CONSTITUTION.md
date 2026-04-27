@@ -68,7 +68,7 @@ Bend runs on Pacific time. The database server runs on UTC. Vercel serverless fu
 
 **Grep test:** the pattern `new Date(.*T00:00:00')` must not appear outside a designated `lib/time.ts` helper. `setHours` on a date produced from a YYYY-MM-DD string is banned.
 
-**Why:** `lib/google-calendar.ts:28-29`, `app/api/reminders/route.ts:96-97`, `app/api/review-request/route.ts:60-61` all build Dates this way. It parses as midnight **server-local time**, not Pacific. On Vercel (UTC) that means every subsequent `.setHours(15, ...)` is constructing 3 PM UTC, not 3 PM Pacific — 7 or 8 hours off. This is the root of the event-creation-offset bug (DISCOVERY §8a #8).
+**Why:** `lib/google-calendar.ts:28-29` and `app/api/reminders/route.ts:96-97` (and previously `app/api/review-request/route.ts`, removed in cluster 2) all built Dates this way. It parses as midnight **server-local time**, not Pacific. On Vercel (UTC) that means every subsequent `.setHours(15, ...)` is constructing 3 PM UTC, not 3 PM Pacific — 7 or 8 hours off. This is the root of the event-creation-offset bug (DISCOVERY §8a #8).
 
 **How to apply:** create `lib/time.ts` with functions like `pacificDateAtSlot(dateStr, slotStr): Date` that do the conversion correctly, and use only that. Any place that needs a Pacific wall-clock moment imports from there.
 
@@ -76,7 +76,7 @@ Bend runs on Pacific time. The database server runs on UTC. Vercel serverless fu
 
 **Grep test:** string literal `'America/Los_Angeles'` must appear at most once in non-test code (in the time helper that reads the DB setting with that as a fallback).
 
-**Why:** `lib/google-calendar.ts:115,119`, `app/api/reminders/route.ts:31`, `app/api/review-request/route.ts:31` all hardcode `America/Los_Angeles`. The `business_settings` table has a `timezone` row for exactly this reason, and no code reads it. See ARCHITECTURE §4.
+**Why:** `lib/google-calendar.ts:115,119` and `app/api/reminders/route.ts:31` hardcode `America/Los_Angeles` (the now-removed `app/api/review-request/route.ts` also did). The `business_settings` table has a `timezone` row for exactly this reason, and no code reads it. See ARCHITECTURE §4.
 
 **How to apply:** one helper, one fallback. The DB row becomes the single source of truth; the string literal is the "we couldn't reach the DB" default.
 
@@ -114,7 +114,7 @@ Pricing is where the app most embarrassingly contradicts itself. It takes one sh
 
 **Grep test:** the literal `90 * 60 * 1000` (and `90 minutes` phrasing outside of comments about the rule) must appear at most once in non-test code.
 
-**Why:** 90-minute duration is hardcoded in `lib/google-calendar.ts`, `lib/availability-engine.ts` (slot end calculation), and implicitly in `app/api/review-request/route.ts`. `business_settings.default_service_duration_minutes = 90` is seeded but nothing reads it. See ARCHITECTURE §4.
+**Why:** 90-minute duration is hardcoded in `lib/google-calendar.ts` and `lib/availability-engine.ts` (slot end calculation); the now-removed `app/api/review-request/route.ts` also relied on it implicitly. `business_settings.default_service_duration_minutes = 90` is seeded but nothing reads it. See ARCHITECTURE §4.
 
 **How to apply:** one export in `lib/time.ts` (or `lib/pricing.ts` — whichever is more cohesive), backed by the DB row, with a fallback.
 
@@ -128,7 +128,7 @@ The 2026-04-22 incident was a failure mode, not a feature bug. The pattern — "
 
 **Grep test:** no top-level `if (!process.env.X) throw new Error(...)` outside a function body. Env var checks happen at request time.
 
-**Why:** `app/api/reminders/route.ts:8-10` and `app/api/review-request/route.ts:8-10` both throw at module load if `CRON_SECRET` is missing. On Vercel, this crashes the serverless function before any handler runs and before any useful log line. The cron invocation sees a 500, the user sees nothing, the logs are inscrutable. See DISCOVERY §7.
+**Why:** `app/api/reminders/route.ts:8-10` (and the now-removed `app/api/review-request/route.ts:8-10`) threw at module load if `CRON_SECRET` was missing. On Vercel, this crashes the serverless function before any handler runs and before any useful log line. The cron invocation sees a 500, the user sees nothing, the logs are inscrutable. See DISCOVERY §7. (Both routes were fixed in commit 568cd00 to validate at request time and return 503 on missing secret; the principle still applies to any future cron route.)
 
 **How to apply:** check inside the handler and return a 503 with a clear message. Cold-start code should never throw; it should produce serializable errors at request time.
 
@@ -158,7 +158,7 @@ Don't advertise features the infrastructure can't deliver. Every claim in user-f
 
 **Grep test:** every path in `vercel.json`'s `crons[]` must correspond to a route file that exports `export async function GET(...)`. Do not export both `GET` and `POST` — pick one.
 
-**Why:** `/api/reminders/route.ts` and `/api/review-request/route.ts` export only `POST`. Vercel Cron sends `GET`. Every scheduled tick returns 405. No reminder is being sent; no booking is being marked `completed`; revenue reports stay at $0. Confirmed against Vercel's current docs on 2026-04-22. See DISCOVERY §8a #1.
+**Why:** `/api/reminders/route.ts` (and the now-removed `/api/review-request/route.ts`) used to export only `POST`. Vercel Cron sends `GET`, so every scheduled tick returned 405. Confirmed against Vercel's docs on 2026-04-22; fixed in commit d4b6740. See DISCOVERY §8a #1.
 
 **How to apply:** rename the handler. If you want a richer API for manual triggering during development, add a separate admin-gated route that calls the same business logic.
 

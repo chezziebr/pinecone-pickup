@@ -58,13 +58,13 @@ Unused/dead: `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `NEXT_PUBLIC_SUPABASE_ANON_K
 **Google Calendar integration is non-functional in production.** Both refresh tokens return `invalid_grant`. Leading cause: OAuth app stuck in Google Cloud Console "Testing" mode (7-day token expiry). Until resolved:
 - The booking page offers slots that contradict the calendars.
 - New bookings succeed in the DB but are not written to the pinecone calendar (the kids' primary visibility channel).
-- Revenue metrics show $0 because the review-request cron (which flips status to `completed`) is also non-functional for a separate reason (see below).
+- Revenue metrics will show $0 until the admin post-service form (cluster 2) is used to mark bookings `completed`. The review-request cron that previously flipped `status` was removed in cluster 2.
 
 **Two related bugs are dormant because of the sev-1, but will activate the moment tokens are fixed** — address them in the same change:
 - `lib/availability-engine.ts:389` hardcodes `-07:00`, so from Nov 2026 onward every slot-to-calendar comparison will be an hour off.
 - `lib/google-calendar.ts:28-29` constructs event times in server-local (UTC) before sending to Google, so every newly-created event will land 7–8 hours off the intended wall-clock time.
 
-**The two Vercel crons (`/api/reminders`, `/api/review-request`) are almost certainly 405-ing every hour** because they export `POST` but Vercel Cron sends `GET`. Fix = rename the handler.
+**(Historical.)** Both Vercel crons used to 405 every hour because they exported `POST` while Vercel Cron sends `GET`. Fixed in commit d4b6740 (2026-04-23). The `/api/review-request` cron was subsequently removed entirely in cluster 2; only `/api/reminders` remains.
 
 **Fastest health check:** `/api/admin/calendar-test?date=<today>` (admin-gated). Returns per-calendar connection status, event count, and error message. Before declaring the calendar integration "fixed," both calendars must return `"status": "connected"` from this endpoint.
 

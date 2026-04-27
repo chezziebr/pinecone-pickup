@@ -186,7 +186,7 @@ Resolution: drop `'pending'` from `lib/validation.ts:38`.
 #### 3. Dead status values
 **Source:** DISCOVERY §3 + Query B + grep of route code.
 
-Both `'cancelled'` (DB CHECK + validation) and `'pending'` (validation only) are dead. Only `'confirmed'` (set by `/api/book`) and `'completed'` (set by `/api/review-request`) are ever written.
+Both `'cancelled'` (DB CHECK + validation) and `'pending'` (validation only) are dead. Only `'confirmed'` (set by `/api/book`) and `'completed'` (set by the admin post-service form, cluster 2) are ever written. (Previously `'completed'` was set by the now-removed `/api/review-request` cron.)
 
 Resolution: drop `'cancelled'` from both DB CHECK and validation; drop `'pending'` from validation. CONSTITUTION §6.3 forbids parking dead values.
 
@@ -257,7 +257,7 @@ Deferred per session scope. Listed here so they don't drift further.
 
 5. **Migration 001 partial application — RESOLVED 2026-04-27 (commit c2487b2).** Session 4's queries (run 2026-04-25) revealed that *none* of migration 001's named constraints applied to production. The CHECK constraints predating migration 006 — `bookings_service_type_check`, `bookings_status_check`, `reviews_rating_check` — were created via the Supabase UI before any migrations existed; PostgreSQL auto-named them with the `<table>_<col>_check` pattern, which is why they don't match 001's `check_*` naming. Migration 001 likely failed at the first `ALTER TABLE ADD CONSTRAINT` (probably duplicate-by-name with a UI-created equivalent) and left the rest unrun.
 
-   Migration 006 (`database/migrations/006_finish_001_constraints_and_triggers.sql`) brings production to 001's intended end state with one deliberate omission: `CHECK (scheduled_date >= CURRENT_DATE)`, plus the matching `IF NEW.scheduled_date < CURRENT_DATE` branch inside `validate_booking_data()`. `CURRENT_DATE` evaluates at every UPDATE; either of those would block the review-request cron's `confirmed → completed` flip on past-dated bookings. API-layer `validateFutureDate` enforces "future date at create time" — the actual business rule.
+   Migration 006 (`database/migrations/006_finish_001_constraints_and_triggers.sql`) brings production to 001's intended end state with one deliberate omission: `CHECK (scheduled_date >= CURRENT_DATE)`, plus the matching `IF NEW.scheduled_date < CURRENT_DATE` branch inside `validate_booking_data()`. `CURRENT_DATE` evaluates at every UPDATE; either of those would block any UPDATE on past-dated bookings (originally the review-request cron's `confirmed → completed` flip; now the admin post-service form's same flip in cluster 2). API-layer `validateFutureDate` enforces "future date at create time" — the actual business rule.
 
    Post-006 production constraint mix:
    - `bookings`: `bookings_pkey`, `bookings_service_type_check` (UI), `bookings_status_check` (UI), `bookings_calendar_sync_status_check` (migration 004), `check_price_positive` (006), `check_valid_lot_size` (006).

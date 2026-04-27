@@ -52,14 +52,11 @@ pinecone-pickup/
 │   │   ├── page.tsx                  Admin login screen
 │   │   ├── dashboard/page.tsx        Admin dashboard (Overview + Schedule work; Bookings/Customers/Finances are placeholders)
 │   │   └── customers/page.tsx        Standalone admin customers page (not linked from the dashboard)
-│   ├── booking/success/page.tsx      Post-booking confirmation screen (has the price-display bug — see §10)
-│   ├── review/page.tsx               Customer review form
+│   ├── booking/success/page.tsx      Post-booking confirmation screen
 │   └── api/
 │       ├── availability/route.ts     GET — slots for a date or available dates for a month
 │       ├── book/route.ts             POST — create booking (validates, writes DB, writes calendar, emails)
-│       ├── review/route.ts           POST — customer review submission
-│       ├── reminders/route.ts        POST — day-before and 1-hour-before reminder cron (see §7.4 re: method mismatch)
-│       ├── review-request/route.ts   POST — post-service review-request email cron
+│       ├── reminders/route.ts        GET — day-before and 1-hour-before reminder cron
 │       └── admin/
 │           ├── login/route.ts                         POST
 │           ├── stats/route.ts                         GET  — dashboard metrics
@@ -139,7 +136,7 @@ pinecone-pickup/
 - `scheduled_time` TEXT matching `^(1[0-2]|[1-9]):[0-5][0-9]\s?(AM|PM)$` (DB trigger)
 - `notes` TEXT NULL
 - `reminders_opted_in` BOOLEAN (customer checkbox on booking form)
-- `status` ∈ {`confirmed`, `completed`, `pending`, `cancelled`} (DB CHECK). **Only `confirmed` (by `/api/book`) and `completed` (by `/api/review-request`) are actually set by code.** `pending` and `cancelled` are permitted but unreachable.
+- `status` ∈ {`confirmed`, `completed`, `pending`, `cancelled`} (DB CHECK). **Only `confirmed` (by `/api/book`) and `completed` (set by the admin post-service form) are actually written by code.** `pending` and `cancelled` are permitted but unreachable.
 - `created_at`, `reminder_day_before_sent`, `reminder_hour_before_sent`, `review_request_sent`, `google_event_id`
 
 ### Reviews columns (inferred)
@@ -148,8 +145,8 @@ pinecone-pickup/
 
 ### Data-model pipeline paths in practice
 
-- **Booking creation** is the only writer to `bookings.*` (except for admin PATCH on `status` and `notes`, and the reminders cron flipping `reminder_*_sent` flags, and the review-request cron flipping `status` to `completed`).
-- **Customer reviews** are written by `/api/review` and read by `/api/admin/stats` (average only) and `/api/admin/customers/[email]` (list). Never surfaced to non-admin users.
+- **Booking creation** is the only writer to `bookings.*` for new rows; subsequent writes are admin PATCH (status, notes), the reminders cron flipping `reminder_*_sent` flags, and the admin post-service form flipping `status` to `completed` along with the post-service columns (cluster 2).
+- **Customer reviews:** the write path (`/api/review`, `app/review/page.tsx`) was removed in cluster 2; the `reviews` table is retained, and admin reads (`/api/admin/stats` average, `/api/admin/customers/[email]` list) still query it.
 - **`audit_logs`** is pure write-only. The trigger exists for defensive documentation, not for use.
 
 ### Canonical sources of truth
@@ -230,8 +227,7 @@ None of these currently produce a visible customer-facing error **because Layer 
       └─▶ SendGrid API  (transactional email)
               from: pinecone.pickup.crew@gmail.com
 
-  Vercel Cron  ──GET──▶  /api/reminders         (hourly; POST handler → 405; see §7.4)
-  Vercel Cron  ──GET──▶  /api/review-request    (hourly; POST handler → 405; see §7.4)
+  Vercel Cron  ──GET──▶  /api/reminders         (hourly)
 ```
 
 There are **no inbound webhooks**. Nothing external pushes into this app. All state changes originate from the customer browser, the admin browser, or a Vercel cron tick.
@@ -279,27 +275,16 @@ There is **no real-time channel** to the kids. Their only notification surface i
    - **Finances** — "coming soon!" placeholder.
    - **Schedule** — works. Renders `AvailabilitySettings` which manages weekly settings, exceptions, seasonal hours, and the `calendar_buffer_minutes` value.
 
-**Current real-world behavior.** The admin login-screen copy ("📊 Analytics — Revenue & booking stats, 👥 Customers, 📅 Schedule, 💰 Earnings") advertises features that are not implemented. Revenue cards show "$0" in practice because revenue counts only `status='completed'` rows and the cron that flips status is non-functional (see §7.4).
+**Current real-world behavior.** Three of five admin tabs (Bookings, Customers, Finances) are being built out in cluster 2; the placeholder copy on those tabs predates that work. Revenue is computed from `status='completed'` rows; cluster 2's admin post-service form is the path that flips status.
 
-### 7.3 Customer review
+### 7.3 Scheduled jobs
 
-1. After a booking is complete, `/api/review-request` is supposed to email the customer a link to `/review?booking=<id>`.
-2. Customer opens that link, rates 1–5, optionally adds comment + neighborhood, submits.
-3. `POST /api/review` writes a row in `reviews`, enforces uniqueness via `unique_review_per_booking`.
-
-Real-world: step 1 depends on the cron (see §7.4). The one real review currently in the DB was presumably collected either before the current token outage or via a manually-sent link.
-
-### 7.4 Scheduled jobs
-
-`vercel.json` declares two hourly crons:
+`vercel.json` declares one hourly cron:
 - `/api/reminders` — sends day-before and 1-hour-before reminders, flips `reminder_day_before_sent` / `reminder_hour_before_sent`.
-- `/api/review-request` — two hours after service end, sends review email and flips `status='completed'`.
 
-**Both route files export only `POST`.** Vercel Cron sends `GET` (confirmed against current Vercel docs). Every scheduled tick returns `405 Method Not Allowed`. No reminder email is being sent. No booking is being marked `completed`. Revenue in the admin dashboard stays at $0. See `DISCOVERY_REPORT.md` §8a #1.
+The route exports `GET` (matching Vercel Cron's invocation) and validates `CRON_SECRET` at request time (returns 503 if unset rather than throwing at module load). Both fixes landed earlier (commits d4b6740 and 568cd00). The previously-documented `/api/review-request` cron was removed in cluster 2.
 
-Both route files also do `if (!CRON_SECRET) throw new Error(...)` at module load, so a missing secret crashes the function at cold start before any handler logic runs.
-
-### 7.5 Diagnostic endpoint
+### 7.4 Diagnostic endpoints
 
 `/api/admin/calendar-test?date=YYYY-MM-DD` (admin-gated). Returns:
 - Presence of each Google-related env var.
@@ -359,7 +344,7 @@ The exhaustive list of env vars the running code actually reads (grepped from so
 - `SENDGRID_FROM_EMAIL` — optional; defaults to `pinecone.pickup.crew@gmail.com`.
 
 **Miscellaneous:**
-- `NEXT_PUBLIC_BASE_URL` — only used to build the review-email link. If unset, emails render as `undefined/review?booking=...`.
+- `NEXT_PUBLIC_BASE_URL` — historically used to build the review-email link; the only consumer (`sendReviewRequest`) was removed in cluster 2. Effectively unused now; safe to remove from Vercel.
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` — constructed into `supabaseClient` in `lib/supabase.ts` but that client is never imported. Effectively unused.
 - `RESEND_API_KEY`, `RESEND_FROM_EMAIL` — referenced only by the dead `lib/resend.ts`. Safe to remove from Vercel.
 - `NODE_ENV` — read for prod/dev branching in `proxy.ts` and `lib/errors.ts`.
@@ -401,7 +386,7 @@ The complete inventory is in `DISCOVERY_REPORT.md` §8. This section captures on
 2. **Two silent catches in the availability pipeline absorb errors into plausible-looking output.** Both must become fail-closed. This is the architectural single biggest lesson of the current session.
 3. **Pricing has no single source of truth.** The booking route's `lotSizeUnits × basePrice` formula is authoritative; the success page and the marketing copy restate it independently. Ripe for a shared constant or database row.
 4. **Timezone handling is inconsistent.** Mixture of server-local, hardcoded-offset (`-07:00`), Pacific-wall-clock-via-`toLocaleString`, and DB `CURRENT_DATE`. No single helper. Every date/time boundary is a potential bug.
-5. **The cron routes don't actually run** because the route method does not match Vercel's GET-only invocation. Reminder and review-request pipelines are therefore dormant. Revenue metrics are $0 as a downstream effect.
+5. **(Historical, resolved.)** The cron routes once exported `POST` while Vercel Cron sends `GET`, so every tick returned 405 — fixed in commit d4b6740 (cluster 1 era). The review-request cron has since been removed entirely (cluster 2); only `/api/reminders` remains. Revenue metrics now depend on the admin post-service form flipping `status` to `completed`, not on a cron.
 6. **Significant dead code and dead dependencies** — parallel email library, parallel auth helper, unused error framework, audit-log writer with no reader, unread `business_settings` rows, and a plural env var name that was never split. Cleanup is straightforward but must be bounded to avoid churn.
 7. **The admin dashboard overstates what it offers** — three of five tabs are placeholders while the login screen advertises them. Either build them or remove the claims.
 8. **`bookings` and `reviews` table schemas are not in the repo.** The canonical schema lives only in Supabase.
