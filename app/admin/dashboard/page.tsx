@@ -506,11 +506,14 @@ export default function AdminDashboard() {
                 <h3 className="text-lg font-medium text-gray-900 mb-4">
                   Customer Management
                 </h3>
-                <div className="text-center py-12 text-gray-500">
-                  <div className="text-4xl mb-4">👥</div>
-                  <p>Customer management interface coming soon!</p>
-                  <p className="text-sm mt-2">This will include customer profiles, contact history, and preferences.</p>
-                </div>
+                <Link
+                  href="/admin/customers"
+                  className="block bg-pine hover:bg-pine-mid text-white p-4 rounded-lg transition-colors max-w-md"
+                >
+                  <div className="text-2xl mb-2">👥</div>
+                  <div className="font-medium">Manage Customers →</div>
+                  <div className="text-sm opacity-90">View customer profiles and booking history on the standalone customers page</div>
+                </Link>
               </div>
             )}
 
