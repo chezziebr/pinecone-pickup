@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAdminAuth, handleRouteError } from '@/lib/auth'
-import { formatPacificDate } from '@/lib/time'
+import { formatPacificDate, pacificToday, pacificMonthOf } from '@/lib/time'
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
     // Fetch all bookings with pagination and limits for security
     const { data: bookings, error: bookingsError } = await supabaseAdmin
       .from('bookings')
-      .select('id, status, scheduled_date, created_at, service_type, price')
+      .select('id, status, scheduled_date, created_at, service_type, price, payment_received, tip_amount, completed_at')
       .limit(1000) // Add reasonable limit
       .order('created_at', { ascending: false })
 
@@ -33,32 +33,27 @@ export async function GET(request: NextRequest) {
       console.error('Reviews error:', reviewsError)
     }
 
-    // Calculate stats safely
-    const now = new Date()
-    const thisMonth = now.getMonth()
-    const thisYear = now.getFullYear()
-
     const totalBookings = bookings?.length || 0
     const completedJobs = bookings?.filter(b => b.status === 'completed').length || 0
     const pendingJobs = bookings?.filter(b => b.status === 'pending' || b.status === 'confirmed').length || 0
 
-    // Calculate revenue using 'price' field (fixed field inconsistency)
+    // Revenue: only count completed AND paid; include tip_amount.
+    // CONSTITUTION §2 — "this month" is evaluated in Pacific time using the
+    // actual completion timestamp, not the booked scheduled_date.
     const totalRevenue = bookings?.reduce((sum, booking) => {
-      if (booking.status === 'completed' && booking.price) {
-        return sum + parseFloat(booking.price.toString())
-      }
-      return sum
+      if (booking.status !== 'completed' || !booking.payment_received) return sum
+      const price = parseFloat(booking.price?.toString() || '0')
+      const tip = booking.tip_amount ?? 0
+      return sum + price + tip
     }, 0) || 0
 
+    const currentPacificMonth = pacificToday().slice(0, 7)
     const monthlyRevenue = bookings?.reduce((sum, booking) => {
-      const bookingDate = new Date(booking.scheduled_date)
-      if (booking.status === 'completed' &&
-          bookingDate.getMonth() === thisMonth &&
-          bookingDate.getFullYear() === thisYear &&
-          booking.price) {
-        return sum + parseFloat(booking.price.toString())
-      }
-      return sum
+      if (booking.status !== 'completed' || !booking.payment_received || !booking.completed_at) return sum
+      if (pacificMonthOf(booking.completed_at) !== currentPacificMonth) return sum
+      const price = parseFloat(booking.price?.toString() || '0')
+      const tip = booking.tip_amount ?? 0
+      return sum + price + tip
     }, 0) || 0
 
     // Calculate review stats

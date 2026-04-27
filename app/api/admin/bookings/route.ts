@@ -56,7 +56,14 @@ export async function GET(request: NextRequest) {
       notes: booking.notes,
       reminders_opted_in: booking.reminders_opted_in,
       created_at: booking.created_at,
-      google_event_id: booking.google_event_id
+      google_event_id: booking.google_event_id,
+      // Post-service columns (migration 007). Null on confirmed-but-not-completed.
+      actual_lot_size: booking.actual_lot_size,
+      payment_received: booking.payment_received,
+      payment_method: booking.payment_method,
+      tip_amount: booking.tip_amount,
+      completion_notes: booking.completion_notes,
+      completed_at: booking.completed_at
     })) || []
 
     return NextResponse.json({

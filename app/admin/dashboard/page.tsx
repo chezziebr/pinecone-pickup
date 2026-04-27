@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import AvailabilitySettings from '@/components/admin/AvailabilitySettings'
-import { formatPacificDate } from '@/lib/time'
+import { formatPacificDate, pacificToday, pacificMonthOf } from '@/lib/time'
 import { formatServiceType } from '@/lib/format'
 
 const VALID_TABS = ['overview', 'bookings', 'customers', 'finances', 'schedule']
@@ -29,6 +29,10 @@ interface RecentBooking {
   service_type: string
   amount: number
   status: string
+  payment_received?: boolean | null
+  payment_method?: string | null
+  tip_amount?: number | null
+  completed_at?: string | null
 }
 
 export default function AdminDashboard() {
@@ -42,6 +46,61 @@ export default function AdminDashboard() {
     return tab && VALID_TABS.includes(tab) ? tab : 'overview'
   })
   const router = useRouter()
+
+  // Finances tab aggregations — recompute when allBookings changes.
+  const financesData = useMemo(() => {
+    const completedPaid = allBookings.filter(
+      b => b.status === 'completed' && b.payment_received === true
+    )
+
+    const totalRevenue = completedPaid.reduce(
+      (sum, b) => sum + b.amount + (b.tip_amount ?? 0),
+      0
+    )
+    const totalTips = completedPaid.reduce(
+      (sum, b) => sum + (b.tip_amount ?? 0),
+      0
+    )
+
+    const methodOrder = [
+      { key: 'cash', label: 'Cash' },
+      { key: 'venmo', label: 'Venmo' },
+      { key: 'check', label: 'Check' },
+      { key: 'other', label: 'Other' },
+    ]
+    const methodBreakdown = methodOrder.map(({ key, label }) => {
+      const matching = completedPaid.filter(b => b.payment_method === key)
+      return {
+        method: label,
+        count: matching.length,
+        total: matching.reduce(
+          (sum, b) => sum + b.amount + (b.tip_amount ?? 0),
+          0
+        ),
+      }
+    })
+
+    // Last 6 calendar months in Pacific time, newest first.
+    const today = pacificToday()
+    const [yyyy, mm] = today.split('-').map(Number)
+    const months: { key: string; label: string; total: number }[] = []
+    for (let i = 0; i < 6; i++) {
+      let m = mm - i
+      let y = yyyy
+      while (m <= 0) {
+        m += 12
+        y -= 1
+      }
+      const key = `${y}-${String(m).padStart(2, '0')}`
+      const label = formatPacificDate(`${key}-01`, { month: 'long', year: 'numeric' })
+      const monthTotal = completedPaid
+        .filter(b => b.completed_at && pacificMonthOf(b.completed_at) === key)
+        .reduce((sum, b) => sum + b.amount + (b.tip_amount ?? 0), 0)
+      months.push({ key, label, total: monthTotal })
+    }
+
+    return { totalRevenue, totalTips, methodBreakdown, months }
+  }, [allBookings])
 
   useEffect(() => {
     const token = localStorage.getItem('adminToken')
@@ -456,14 +515,89 @@ export default function AdminDashboard() {
             )}
 
             {activeTab === 'finances' && (
-              <div>
-                <h3 className="text-lg font-medium text-gray-900 mb-4">
-                  Financial Overview
-                </h3>
-                <div className="text-center py-12 text-gray-500">
-                  <div className="text-4xl mb-4">💰</div>
-                  <p>Financial reports and tracking coming soon!</p>
-                  <p className="text-sm mt-2">This will include detailed revenue reports, payment tracking, and tax information.</p>
+              <div className="space-y-6">
+                {/* Top totals */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="bg-white rounded-lg p-6 shadow-sm">
+                    <div className="text-sm text-gray-600 mb-2">Total Revenue (all-time)</div>
+                    <div className="text-3xl font-bold text-pine">{formatCurrency(financesData.totalRevenue)}</div>
+                  </div>
+                  <div className="bg-white rounded-lg p-6 shadow-sm">
+                    <div className="text-sm text-gray-600 mb-2">Total Tips Received</div>
+                    <div className="text-3xl font-bold text-pine">{formatCurrency(financesData.totalTips)}</div>
+                  </div>
+                </div>
+
+                {/* Payment Method Breakdown */}
+                <div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">
+                    Payment Method Breakdown
+                  </h3>
+                  <div className="bg-gray-50 rounded-lg overflow-hidden">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-100">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Method
+                          </th>
+                          <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Count
+                          </th>
+                          <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Total
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {financesData.methodBreakdown.map(({ method, count, total }) => (
+                          <tr key={method}>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {method}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 text-right">
+                              {count}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-right">
+                              {formatCurrency(total)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Monthly Breakdown */}
+                <div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">
+                    Revenue by Month (last 6)
+                  </h3>
+                  <div className="bg-gray-50 rounded-lg overflow-hidden">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-100">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Month
+                          </th>
+                          <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Revenue
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {financesData.months.map(({ key, label, total }) => (
+                          <tr key={key}>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {label}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-right">
+                              {formatCurrency(total)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             )}

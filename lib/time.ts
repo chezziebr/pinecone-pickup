@@ -12,6 +12,16 @@ export function pacificToday(tz: string = DEFAULT_BUSINESS_TIMEZONE): string {
   return formatInTimeZone(new Date(), 'yyyy-MM-dd', { timeZone: tz })
 }
 
+// The YYYY-MM month string for an arbitrary timestamp (ISO string or Date),
+// evaluated in the given timezone. Used for bucketing rows like
+// bookings.completed_at into Pacific calendar months for revenue reports.
+export function pacificMonthOf(
+  timestamp: string | Date,
+  tz: string = DEFAULT_BUSINESS_TIMEZONE,
+): string {
+  return formatInTimeZone(new Date(timestamp), 'yyyy-MM', { timeZone: tz })
+}
+
 // A UTC Date corresponding to a wall-clock moment on a given date in the given
 // timezone. Example: pacificDateAtSlot('2026-06-15', '3:00 PM') ->
 // 2026-06-15T22:00:00.000Z (PDT, UTC-7). December 15 would be UTC-8.
