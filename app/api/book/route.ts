@@ -93,7 +93,6 @@ export async function POST(request: NextRequest) {
       created_at: new Date().toISOString(),
       reminder_day_before_sent: false,
       reminder_hour_before_sent: false,
-      review_request_sent: false,
       google_event_id: null,
       calendar_sync_status: 'pending' as const,
       confirmation_email_sent_at: null,

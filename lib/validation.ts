@@ -210,62 +210,6 @@ export function validateBookingData(data: any): ValidationResult<BookingData> {
   }
 }
 
-export interface ReviewData {
-  bookingId: string
-  rating: number
-  comment?: string
-  neighborhood?: string
-}
-
-export function validateReviewData(data: any): ValidationResult<ReviewData> {
-  const errors: Record<string, string> = {}
-  const sanitized: Partial<ReviewData> = {}
-
-  // Booking ID validation
-  if (!data.bookingId || typeof data.bookingId !== 'string') {
-    errors.bookingId = 'Booking ID is required'
-  } else if (!PATTERNS.UUID.test(data.bookingId)) {
-    errors.bookingId = 'Invalid booking ID format'
-  } else {
-    sanitized.bookingId = data.bookingId
-  }
-
-  // Rating validation
-  if (data.rating === undefined || data.rating === null) {
-    errors.rating = 'Rating is required'
-  } else if (!Number.isInteger(data.rating) || data.rating < 1 || data.rating > 5) {
-    errors.rating = 'Rating must be an integer between 1 and 5'
-  } else {
-    sanitized.rating = data.rating
-  }
-
-  // Comment validation (optional)
-  if (data.comment !== undefined) {
-    if (typeof data.comment !== 'string') {
-      errors.comment = 'Comment must be text'
-    } else {
-      const sanitizedComment = sanitizeString(data.comment, 1000)
-      sanitized.comment = sanitizedComment.length > 0 ? sanitizedComment : undefined
-    }
-  }
-
-  // Neighborhood validation (optional)
-  if (data.neighborhood !== undefined) {
-    if (typeof data.neighborhood !== 'string') {
-      errors.neighborhood = 'Neighborhood must be text'
-    } else {
-      const sanitizedNeighborhood = sanitizeString(data.neighborhood, 100)
-      sanitized.neighborhood = sanitizedNeighborhood.length > 0 ? sanitizedNeighborhood : undefined
-    }
-  }
-
-  return {
-    isValid: Object.keys(errors).length === 0,
-    errors,
-    sanitizedData: sanitized
-  }
-}
-
 export interface AdminBookingUpdate {
   id: string
   status?: string

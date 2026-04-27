@@ -28,6 +28,10 @@
 
 **Infrastructure in the working tree but not in the user flow.** Several pieces exist that nothing references — see §8.
 
+### Update 2026-04-27 — review-request workflow removed
+
+The "Customer gets review-request email + lands on `/review`" row above (and every downstream reference in this doc to `/api/review-request`, `sendReviewRequest`, the second cron, or "review-request" as a current feature) is **historical**. The cron-driven review-request workflow has been removed deliberately — it was the path that flipped `status` from `confirmed` to `completed`, which is now handled by an admin-driven post-service form (cluster 2). What was deleted in this change: `app/api/review-request/route.ts`, the `/api/review-request` entry in `vercel.json`, and `sendReviewRequest()` + its email template in `lib/sendgrid.ts`. The remaining cron is `/api/reminders` only. The `bookings.review_request_sent` column is intentionally retained — column-level cleanup is more disruptive than the column being a no-op default. The receiving side (`app/review/page.tsx` and `app/api/review/route.ts`) is left in place and is now unreachable from the email path; that orphan is out of scope for this change but a candidate for future cleanup.
+
 ---
 
 ## 2. The stack
