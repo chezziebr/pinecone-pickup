@@ -101,6 +101,20 @@ Columns used: `id` (UUID), `booking_id` (UUID), `rating` (1–5), `comment`, `ne
 - The DB trigger regex for `scheduled_time` is `^(1[0-2]|[1-9]):[0-5][0-9]\s?(AM|PM)$`. The validation regex in code is `^(1[0-2]|[1-9]):[0-5]\d\s?(AM|PM)$`. Equivalent. ✓
 - **`BookingData` is defined in two places** — `lib/availability.ts` and `lib/validation.ts`. They have different fields (availability's has `id`/`price`/`google_event_id`; validation's does not). Drift risk if either evolves.
 
+### Update 2026-04-27 — migration 001 history (commit c2487b2)
+
+Sharper framing of the constraint references in §3 above. Session 4's queries (run 2026-04-25) and the migration 006 reconciliation (applied 2026-04-27) revealed that **migration 001's named constraints never applied to production at all**. The CHECK constraints that exist on `bookings` and `reviews` predating migration 006 — `bookings_service_type_check`, `bookings_status_check`, `reviews_rating_check` — were created through the Supabase UI before any migrations existed. PostgreSQL auto-named them with the `<table>_<col>_check` pattern, which is why they don't match 001's `check_*` naming.
+
+Migration 001 likely ran but failed at the first `ALTER TABLE ADD CONSTRAINT` (probably a duplicate-by-name with a UI-created equivalent), leaving the rest of the file unrun. The exact failure mode isn't recoverable from logs.
+
+**Migration 006** (`database/migrations/006_finish_001_constraints_and_triggers.sql`, applied 2026-04-27) brings production to 001's intended end state with one deliberate omission: the `CHECK (scheduled_date >= CURRENT_DATE)` constraint, plus the matching `IF NEW.scheduled_date < CURRENT_DATE` branch inside `validate_booking_data()`. `CURRENT_DATE` evaluates at every UPDATE; either of those would block the review-request cron's `confirmed → completed` flip on past-dated bookings. API-layer `validateFutureDate` enforces "future date at create time" — the actual business rule.
+
+Post-006 production constraint set:
+- `bookings`: `bookings_pkey`, `bookings_service_type_check` (UI), `bookings_status_check` (UI), `bookings_calendar_sync_status_check` (migration 004), `check_price_positive` (006), `check_valid_lot_size` (006).
+- `reviews`: `reviews_pkey`, `reviews_booking_id_fkey`, `reviews_rating_check` (UI), `unique_review_per_booking` (006).
+
+The hybrid naming (UI-auto-named + 006-named) is the correct state, not drift. Lines above attributing constraints "from migration 001" should be read as "constraints 001 *intended* — actual sources are now mixed."
+
 ---
 
 ## 4. Availability computation — traced end to end
