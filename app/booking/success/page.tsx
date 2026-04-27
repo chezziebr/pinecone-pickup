@@ -13,6 +13,7 @@ function BookingSuccessContent() {
   const time = searchParams.get('time') || ''
   const service = searchParams.get('service') || ''
   const address = searchParams.get('address') || ''
+  const price = searchParams.get('price') || ''
 
   // Format the date
   const formattedDate = date ? formatPacificDate(date, {
@@ -21,10 +22,6 @@ function BookingSuccessContent() {
     month: 'long',
     day: 'numeric',
   }) : ''
-
-  // Calculate price
-  const basePrice = service === 'Pick Up Only' ? 20 : 40
-  const price = basePrice // This would be calculated based on lot size in real implementation
 
   return (
     <div className="min-h-screen bg-cream">
@@ -63,10 +60,12 @@ function BookingSuccessContent() {
               <span className="text-gray-600">Service</span>
               <span className="font-medium">{service}</span>
             </div>
-            <div className="flex justify-between items-center py-2 text-lg font-bold">
-              <span className="text-pine">Total Price</span>
-              <span className="text-pine">${price}</span>
-            </div>
+            {price && (
+              <div className="flex justify-between items-center py-2 text-lg font-bold">
+                <span className="text-pine">Total Price</span>
+                <span className="text-pine">${price}</span>
+              </div>
+            )}
           </div>
         </div>
 

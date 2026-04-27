@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { pacificToday } from '@/lib/time'
 import { WAIVER_TEXT } from '@/lib/constants'
+import { calculateBookingPrice } from '@/lib/pricing'
 
 interface AvailabilityResponse {
   dates?: string[]
@@ -179,13 +180,14 @@ export default function BookingForm() {
       const result = await response.json()
 
       if (response.ok) {
-        // Redirect to success page
+        // Redirect to success page; price comes from the API response (canonical stored value)
         const params = new URLSearchParams({
           name: formData.first_name,
           date: formData.scheduled_date,
           time: formData.scheduled_time,
           service: formData.service_type === 'pickup_only' ? 'Pick Up Only' : 'Pick Up + Haul Away',
-          address: formData.address
+          address: formData.address,
+          price: String(result.price)
         })
         router.push(`/booking/success?${params}`)
       } else {
@@ -336,12 +338,22 @@ export default function BookingForm() {
                 className={`w-full p-3 border rounded-lg ${errors.service_type ? 'border-red-500' : 'border-gray-300'}`}
               >
                 <option value="">Select service</option>
-                <option value="pickup_only">Pick Up Only ($20)</option>
-                <option value="pickup_haul">Pick Up + Haul Away ($40)</option>
+                <option value="pickup_only">Pick Up Only ($20/¼ acre)</option>
+                <option value="pickup_haul">Pick Up + Haul Away (+$20 flat)</option>
               </select>
               {errors.service_type && <p className="text-red-500 text-sm mt-1">{errors.service_type}</p>}
             </div>
           </div>
+
+          {/* Live total — appears once both lot size and service type are selected */}
+          {formData.lot_size && formData.service_type && (
+            <div className="mb-8 text-right">
+              <span className="text-sm text-gray-600">Total: </span>
+              <span className="text-2xl font-bold text-pine">
+                ${calculateBookingPrice(formData.lot_size, formData.service_type)}
+              </span>
+            </div>
+          )}
 
           {/* Calendar */}
           <div className="mb-8">

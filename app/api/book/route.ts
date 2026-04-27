@@ -5,15 +5,8 @@ import { sendConfirmationEmail } from '@/lib/sendgrid'
 import { checkRateLimit, RATE_LIMITS, rateLimitResponse } from '@/lib/rate-limit'
 import { validateBookingData } from '@/lib/validation'
 import { validateBusinessHours, validateFutureDate, validateReasonableAdvanceBooking, isValidServiceForDate } from '@/lib/availability'
+import { calculateBookingPrice } from '@/lib/pricing'
 import { v4 as uuidv4 } from 'uuid'
-
-// Lot size mapping for price calculation
-const lotSizeUnits: Record<string, number> = {
-  '¼ acre': 1,
-  '½ acre': 2,
-  '¾ acre': 3,
-  '1 acre+': 4
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -77,10 +70,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Calculate price using sanitized data
-    const units = lotSizeUnits[sanitizedData.lot_size!]
-    const basePrice = sanitizedData.service_type === 'pickup_only' ? 20 : 40
-    const totalPrice = basePrice * units
+    // Calculate price using sanitized data (canonical formula in lib/pricing.ts)
+    const totalPrice = calculateBookingPrice(sanitizedData.lot_size!, sanitizedData.service_type!)
 
     // Create booking record
     const bookingId = uuidv4()

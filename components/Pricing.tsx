@@ -57,7 +57,8 @@ export default function Pricing() {
               Pick Up + Haul Away
             </h3>
             <div className="text-4xl font-fraunces font-bold text-pine mb-4">
-              $40<span className="text-lg font-normal text-gray-500">/¼ acre</span>
+              $20<span className="text-lg font-normal text-gray-500">/¼ acre</span>
+              <div className="text-lg font-normal text-gray-500 mt-1">+ $20 flat haul-away</div>
             </div>
             <p className="text-gray-600 mb-6">
               Complete service — we collect the pinecones and take them away. Zero work for you!
@@ -82,7 +83,7 @@ export default function Pricing() {
         {/* Additional info */}
         <div className="text-center mt-12">
           <p className="text-gray-600">
-            Lot sizes: ¼ acre, ½ acre (2 units), ¾ acre (3 units), 1+ acre (4 units)
+            Lot sizes: ¼ acre, ½ acre, ¾ acre, 1+ acre. Larger lots may need a custom quote.
           </p>
         </div>
       </div>
