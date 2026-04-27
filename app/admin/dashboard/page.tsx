@@ -5,6 +5,9 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import AvailabilitySettings from '@/components/admin/AvailabilitySettings'
 import { formatPacificDate } from '@/lib/time'
+import { formatServiceType } from '@/lib/format'
+
+const VALID_TABS = ['overview', 'bookings', 'customers', 'finances', 'schedule']
 
 interface DashboardStats {
   totalBookings: number
@@ -31,8 +34,13 @@ interface RecentBooking {
 export default function AdminDashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [recentBookings, setRecentBookings] = useState<RecentBooking[]>([])
+  const [allBookings, setAllBookings] = useState<RecentBooking[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('overview')
+  const [activeTab, setActiveTab] = useState(() => {
+    if (typeof window === 'undefined') return 'overview'
+    const tab = new URLSearchParams(window.location.search).get('tab')
+    return tab && VALID_TABS.includes(tab) ? tab : 'overview'
+  })
   const router = useRouter()
 
   useEffect(() => {
@@ -48,7 +56,7 @@ export default function AdminDashboard() {
     try {
       const token = localStorage.getItem('adminToken')
 
-      const [statsResponse, bookingsResponse] = await Promise.all([
+      const [statsResponse, bookingsResponse, allBookingsResponse] = await Promise.all([
         fetch('/api/admin/stats', {
           credentials: 'include',
           headers: { 'Authorization': `Bearer ${token}` }
@@ -56,11 +64,15 @@ export default function AdminDashboard() {
         fetch('/api/admin/bookings?limit=5', {
           credentials: 'include',
           headers: { 'Authorization': `Bearer ${token}` }
+        }),
+        fetch('/api/admin/bookings?limit=500&sortBy=scheduled_date&order=asc', {
+          credentials: 'include',
+          headers: { 'Authorization': `Bearer ${token}` }
         })
       ])
 
       // If any endpoint returns 401, token is invalid — redirect to login
-      if (statsResponse.status === 401 || bookingsResponse.status === 401) {
+      if (statsResponse.status === 401 || bookingsResponse.status === 401 || allBookingsResponse.status === 401) {
         localStorage.removeItem('adminToken')
         router.push('/admin')
         return
@@ -74,6 +86,11 @@ export default function AdminDashboard() {
       if (bookingsResponse.ok) {
         const bookingsData = await bookingsResponse.json()
         setRecentBookings(bookingsData.bookings || [])
+      }
+
+      if (allBookingsResponse.ok) {
+        const allBookingsData = await allBookingsResponse.json()
+        setAllBookings(allBookingsData.bookings || [])
       }
     } catch (error) {
       console.error('Error fetching dashboard data:', error)
@@ -281,7 +298,7 @@ export default function AdminDashboard() {
                                 {formatDate(booking.scheduled_date)} at {booking.scheduled_time}
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                {booking.service_type}
+                                {formatServiceType(booking.service_type)}
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                 {formatCurrency(booking.amount)}
@@ -296,7 +313,7 @@ export default function AdminDashboard() {
                         ) : (
                           <tr>
                             <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
-                              No bookings found
+                              No bookings yet.
                             </td>
                           </tr>
                         )}
@@ -345,12 +362,82 @@ export default function AdminDashboard() {
             {activeTab === 'bookings' && (
               <div>
                 <h3 className="text-lg font-medium text-gray-900 mb-4">
-                  Booking Management
+                  All Bookings
                 </h3>
-                <div className="text-center py-12 text-gray-500">
-                  <div className="text-4xl mb-4">🚧</div>
-                  <p>Booking management interface coming soon!</p>
-                  <p className="text-sm mt-2">This will include detailed booking views, status updates, and customer communication.</p>
+                <div className="bg-gray-50 rounded-lg overflow-hidden">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-100">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Customer
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Date & Time
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Service
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Booked Price
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Status
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Action
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {allBookings.length > 0 ? (
+                        allBookings.map((booking) => (
+                          <tr key={booking.id} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                              {booking.customer_name}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {formatDate(booking.scheduled_date)} at {booking.scheduled_time}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {formatServiceType(booking.service_type)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {formatCurrency(booking.amount)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(booking.status)}`}>
+                                {booking.status}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm">
+                              {booking.status === 'confirmed' && (
+                                <Link
+                                  href={`/admin/bookings/${booking.id}/complete`}
+                                  className="inline-flex items-center px-3 py-1 bg-orange hover:bg-orange/90 text-white text-xs font-medium rounded-full transition-colors"
+                                >
+                                  Complete
+                                </Link>
+                              )}
+                              {booking.status === 'completed' && (
+                                <Link
+                                  href={`/admin/bookings/${booking.id}/complete`}
+                                  className="inline-flex items-center px-3 py-1 bg-pine hover:bg-pine-mid text-white text-xs font-medium rounded-full transition-colors"
+                                >
+                                  Edit
+                                </Link>
+                              )}
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                            No bookings yet.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             )}
