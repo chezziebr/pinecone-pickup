@@ -72,7 +72,7 @@ pinecone-pickup/
 │           ├── business-settings/route.ts             GET/PUT
 │           └── calendar-test/route.ts                 GET — diagnostic endpoint (see §7.5)
 ├── components/
-│   ├── Nav.tsx, Hero.tsx, HowItWorks.tsx, Pricing.tsx, Testimonials.tsx, Footer.tsx
+│   ├── Nav.tsx, Hero.tsx, HowItWorks.tsx, Pricing.tsx, Footer.tsx
 │   ├── BookingForm.tsx               The customer booking UI (client component)
 │   └── admin/AvailabilitySettings.tsx  2,101 lines — weekly/exception/seasonal/buffer admin UI
 ├── lib/
@@ -408,6 +408,6 @@ What is deliberately **out of scope** in the current product, and should stay ou
 
 What is **in scope but unbuilt**:
 
-- The Testimonials section on the home page is hardcoded. Real customer reviews are being collected and ignored. Displaying the real ones (with consent) is cheap and valuable.
+- ~~The Testimonials section on the home page is hardcoded.~~ **RESOLVED 2026-04-27 (cluster 3).** Section deleted entirely; reviews table is empty and frozen (the customer-facing write path was removed in cluster 2). Re-introduce only when a curated source of real testimonials exists.
 - A short "waiver accepted" checkbox on the booking form, backed by a `waiver_accepted_at` column, is a near-zero-risk addition that Chez has flagged as desired.
 - The three "coming soon" dashboard tabs either need to be built (Bookings, Customers, Finances surface work) or removed from the UI so the admin landing page doesn't advertise vaporware.

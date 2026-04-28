@@ -35,7 +35,7 @@ Full list lives in `CONSTITUTION.md`. The ones that have bitten this app hardest
 ## 3. Scope guardrails
 
 - **Out of scope, do not accidentally weave in:** customer accounts / customer auth, online payments (Stripe etc.), SMS, multi-tenant patterns, custom-domain-requiring integrations (e.g., Resend with a non-gmail from).
-- **In scope but unbuilt:** a liability-waiver checkbox on the booking form (+ `waiver_accepted_at` column), surfacing real customer reviews instead of the hardcoded fake testimonials, filling in the three "coming soon" admin tabs (or removing their advertisements).
+- **In scope but unbuilt:** a liability-waiver checkbox on the booking form (+ `waiver_accepted_at` column), filling in the three "coming soon" admin tabs (or removing their advertisements). (The testimonials portion of this list was removed in cluster 3 — section deleted entirely; waiver and admin-tab portions also done in clusters 1 and 2 respectively, but this bullet is preserved here as a doc-state snapshot.)
 - **Dead weight to delete, not extend:** `lib/resend.ts`, `lib/admin-auth.ts`, `lib/errors.ts`, the `resend` / `react-email` / `@react-email/components` deps, the `audit_logs` write path (no reader), `business_settings.default_service_duration_minutes` + `timezone` rows (no reader). Constitution §6.3 forbids parking dead code.
 
 ## 4. Operational reality (update as it changes)
