@@ -37,7 +37,13 @@ const PATTERNS = {
 const ALLOWED_VALUES = {
   LOT_SIZES: ['¼ acre', '½ acre', '¾ acre', '1 acre+'],
   SERVICE_TYPES: ['pickup_only', 'pickup_haul'],
-  STATUSES: ['confirmed', 'completed', 'pending', 'cancelled']
+  // DB CHECK on bookings.status also allows 'cancelled'; not surfaced in code
+  // yet (no cancellation/reschedule flow built — see ops.md deferred-decisions).
+  // 'pending' was permitted here historically but never accepted by the DB and
+  // never written by any path; dropped in cluster 3 (2026-04-27) along with
+  // 'cancelled'. The DB-permits-superset-of-validation asymmetry is intentional:
+  // if cancellation is ever built, the value is already valid in the column.
+  STATUSES: ['confirmed', 'completed']
 }
 
 // Sanitization functions
