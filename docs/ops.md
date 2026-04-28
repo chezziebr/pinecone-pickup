@@ -1,6 +1,61 @@
 # Pinecone Pick Up Crew — Operations
 
-**Status as of 2026-04-26.** Operational facts the app depends on that aren't derivable from code. Required by Constitution §6.2. Update any time OAuth config, calendar identities, tokens, or schema state changes.
+**Status as of 2026-04-28.** Operational facts the app depends on that aren't derivable from code. Required by Constitution §6.2. Update any time OAuth config, calendar identities, tokens, or schema state changes.
+
+---
+
+## Review process retrospective (2026-04-22 → 2026-04-28)
+
+A 7-day cleanup pass closed in three structured clusters. This section is the canonical summary; the changelog at the bottom of this doc has the per-day detail.
+
+### Starting state — 2026-04-22
+
+Original `DISCOVERY_REPORT.md` identified ~30 findings. **Sev-1:** both Google Calendar refresh tokens dead (`invalid_grant`); the booking site was silently scheduling overlapping appointments because the calendar-subtraction layer was a no-op. **Plus:** three latent timezone bugs (`-07:00` hardcoded; server-local Date math; `.toISOString().split('T')[0]` for "today"); both Vercel crons 405-ing every hour (handlers exported `POST`, cron sends `GET`); `bookings` and `reviews` `CREATE TABLE` statements missing from the repo; ~10 pieces of dead code/dependencies; fake hardcoded testimonials; three "coming soon" admin tabs while the login screen advertised them; no liability waiver; pricing math bug producing $120 for a $80 booking; success page recomputing price wrongly; a partial migration 001 nobody had noticed.
+
+### Sessions and clusters
+
+| Date | Headline | Commits |
+|---|---|---|
+| 2026-04-23 | Session 1 — token regeneration + OAuth-app to In Production + calendar architecture detangle | ~5 |
+| 2026-04-23 | Session 2 — cron `GET`/`POST` mismatch fix (`d4b6740`) | 2 |
+| 2026-04-24 | Session 3 — timezone bugs (`lib/time.ts` introduced) + render-layer family (`formatPacificDate` at 8 sites) | 5 |
+| 2026-04-25 | Repo reorg cleanup — `docs/` directory; `.claude/` etc. ignored | 2 |
+| 2026-04-25 | Session 4 — downstream-effect tracking (migration 004 + `/api/book` instrumentation + `/api/admin/booking-health`) | 4 |
+| 2026-04-26 | Cleanup combo — cron module-load `throw` fix + dead-code/dep deletion | 2 |
+| 2026-04-27 | Cluster 1 — migration 001 reconciliation via 006 + waiver feature (005 + UI + validation) + pricing math correction | 8 |
+| 2026-04-27 | Cluster 2 — review-request workflow removal + post-service workflow (007 + form + endpoints) + admin dashboard completion (3 tabs) | 7 |
+| 2026-04-27 → 28 | Cluster 3 — testimonials removal + dead enum cleanup + ARCHITECTURE/CONSTITUTION reconciliation | 4 |
+
+**Total: 40 commits across 7 days** (`a52ecf0` → `893e6b0`).
+
+### Total artifacts shipped
+
+5 migrations applied to production (000, 004, 005, 006, 007). ~15 source files added (notably `lib/time.ts`, `lib/pricing.ts`, `lib/constants.ts`, `lib/format.ts`, the post-service form + 2 supporting endpoints, `/api/admin/booking-health`, `scripts/get-refresh-token.mjs`, plus the 5 migration SQL files); ~7 files deleted entirely (the three dead lib files, the entire review-request workflow including receiver, fake Testimonials); plus stripped functions inside surviving files (`hasTimeConflict`, `calculateServiceDuration`, `sendReviewRequest`, `validateReviewData`/`ReviewData`). Test count went from 0 → 18 (`lib/time.test.ts`, vitest, the only test file). Documentation: `docs/ops.md` and this retrospective added; `DISCOVERY_REPORT.md` got appended-correction notes; `docs/ARCHITECTURE.md` and `CONSTITUTION.md` reconciled with post-cluster reality. Production `bookings` table ended at **0 rows** (clean state for the first time since the project started).
+
+### What's still live work
+
+- **CONSTITUTION §3.3 partial.** `loadServiceDurationMinutes()` exists in `lib/time.ts`; hardcoded `90 * 60 * 1000` literals still in `lib/google-calendar.ts` and `lib/availability-engine.ts` slot-end calculations. Grep test does not pass clean.
+- **CONSTITUTION §1.1 / §4.2.** Silent `catch` in `lib/availability-engine.ts` `getAvailabilityData` still swallows external-data errors. Codified as a rule but the implementation hasn't been made fail-closed.
+- **`PERSONAL_CALENDAR_IDS`** — env var name plural, used as singular in three call sites. Drift; deferred per Multi-calendar-availability item below.
+- **Cancellation / reschedule flow** — deferred indefinitely. DB CHECK on `bookings.status` retains `'cancelled'` as permissive superset.
+- **Real review collection** — no current path. Reviews table empty and frozen. Re-introduce only when a curated source exists.
+- **Resend CSP allowance + `RESEND_API_KEY` / `RESEND_FROM_EMAIL` in Vercel** — `proxy.ts` CSP `connect-src` still allows `api.resend.com` (ghost from the Resend era); Vercel env still has the two RESEND vars. Both safe to remove.
+- **`audit_logs` write path with no reader** — `audit_trigger` writes on every `bookings` INSERT/UPDATE/DELETE; nothing queries the table. `changed_by` is also `NULL` on every row under service-role connections (no JWT claims). Acknowledged caveat.
+
+### Process patterns that worked
+
+- **Atomic commits with traceable subjects.** Every commit names a single thing; commit subjects are searchable. Fast `git log --oneline` scan = fast project history.
+- **Design walkthroughs before code at every gate.** Especially for cluster 2 buildout (post-service form, admin tabs) — surface the design questions, get answers, then write. Saved rework.
+- **Production verification before push.** Cluster 1's "schema-deploy ordering" lesson reinforced this — the only ~2 minutes of broken production were when the migration was applied without code yet deployed.
+- **Visible-to-Chez explicit gates.** "Approve", "report SHA", "show diff before commit" framing at each step. Made it impossible to drift past a decision point silently.
+- **Delete-the-test-data discipline.** Every test booking created during verification was deleted before the next session. Production observability surfaces (booking-health, Finances tab) stayed honest. `bookings` ended at 0 rows.
+
+### Process patterns that surprised
+
+- **Migration 001 was only partially applied** — Session 4's query A/B/C/D analysis revealed that *none* of 001's named constraints had landed at all. The CHECKs that existed in production were Supabase-UI-generated before any migrations existed, with auto-named constraints (`bookings_*_check`). The original DISCOVERY had assumed three CHECKs from 001 had run; query B contradicted that.
+- **Pricing math bug surfaced through customer-perspective testing during waiver verification**, not through code review. The unit math looked plausible (`basePrice × units`) until someone walked through a ¾-acre haul-away booking end-to-end and saw $120 stored vs. $40 displayed vs. $80 expected.
+- **Schema-deploy ordering broke production for ~2 minutes.** Migration 005 added `waiver_accepted_at NOT NULL` to `bookings` *before* the code populating it was deployed. Every `/api/book` call returned 500 on the NULL violation during the gap. Lesson: for tightening migrations, ship the writing code first, deploy, then apply NOT NULL. Or two-step the migration (nullable add now, NOT NULL later).
+- **`audit_logs` trigger has `changed_by = NULL` on every row** because the app uses the service-role key on every server route, which carries no JWT claims, so `current_setting('request.jwt.claims', true)::json->>'email'` resolves to NULL. Acceptable while the table is unread; matters if a reader is ever built.
 
 ---
 
