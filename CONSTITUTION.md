@@ -38,9 +38,9 @@ The app's core promise is "you can book a time when the crew is actually availab
 
 **Grep test:** every `await createBookingEvent(...)` call site must check the result and either (a) record the failure on the booking row (`google_event_id IS NULL` with a reason column) or (b) surface it to an admin notification channel. Plain `try { await createBookingEvent() } catch { /* ignore */ }` is banned.
 
-**Why:** `app/api/book/route.ts:123–136` currently swallows calendar-insert failures. Because the admin dashboard's "Bookings" tab is a placeholder, the kids' primary channel for seeing new bookings **is the pinecone Google Calendar itself**. A silent failure to write there means the kids may not know the customer exists until the customer shows up. See DISCOVERY §8a #0 "Cascading consequence."
+**Why:** `app/api/book/route.ts:123–136` once swallowed calendar-insert failures. Because the admin dashboard's "Bookings" tab was a placeholder, the kids' primary channel for seeing new bookings **was the pinecone Google Calendar itself**. A silent failure to write there meant the kids might not know the customer existed until the customer showed up. See DISCOVERY §8a #0 "Cascading consequence." **Resolved Session 4 (commits `f49dc8b`, `d3b356d`, `7db14e3`):** migration 004 added `calendar_sync_status` (CHECK enum) + `confirmation_email_sent_at`; `/api/book` records outcomes explicitly with structured `[booking]`-prefixed logs; `/api/admin/booking-health` surfaces the gaps. Backfilling missed events is now possible from `bookings` alone.
 
-**How to apply:** if `createBookingEvent` throws, the booking row must end up with `google_event_id = NULL` and a visible signal somewhere. Backfilling missed events must be possible from the DB alone.
+**How to apply:** if `createBookingEvent` throws, the booking row must end up with `google_event_id = NULL` (and `calendar_sync_status='failed'`) plus a visible signal in `booking-health`. Backfilling missed events must be possible from the DB alone.
 
 ### 1.4 `/api/admin/calendar-test` is the canonical calendar-health check and must remain green in production.
 
@@ -60,7 +60,7 @@ Bend runs on Pacific time. The database server runs on UTC. Vercel serverless fu
 
 **Grep test:** the strings `-07:00`, `-08:00`, `+07:00`, `+08:00` must not appear in any `.ts`/`.tsx` file under `lib/` or `app/`.
 
-**Why:** `lib/availability-engine.ts:389` and `app/api/admin/calendar-test/route.ts:37-38` hardcode `-07:00` (PDT). Bend is on PST for roughly four months a year. See DISCOVERY §8a #2. This is a bug that silently activates every November and deactivates every March.
+**Why:** `lib/availability-engine.ts:389` and `app/api/admin/calendar-test/route.ts:37-38` once hardcoded `-07:00` (PDT). Bend is on PST for roughly four months a year. See DISCOVERY §8a #2. This was a bug that would have silently activated every November and deactivated every March. **Resolved Session 3 (commits `0ade6e0`, `9c05f42`):** both call sites use `pacificDateAtSlot` from `lib/time.ts`, which converts via `date-fns-tz` and the IANA `America/Los_Angeles` timezone.
 
 **How to apply:** use IANA timezone IDs (`America/Los_Angeles`) with a real timezone library (`Intl.DateTimeFormat`, `luxon`, or `date-fns-tz`), never offset strings.
 
@@ -84,7 +84,7 @@ Bend runs on Pacific time. The database server runs on UTC. Vercel serverless fu
 
 **Grep test:** the pattern `.toISOString().split('T')[0]` must not appear in any code path that reasons about "today" or "past."
 
-**Why:** `components/BookingForm.tsx:105`, `lib/availability.ts:22-24`, `lib/validation.ts:157-163` compute "today" in UTC. Between 4 PM and midnight Pacific, UTC is already on the next calendar day, so Pacific-today is marked as past and greyed out in the booking calendar. See DISCOVERY §8a #4.
+**Why:** `components/BookingForm.tsx:105`, `lib/availability.ts:22-24`, `lib/validation.ts:157-163` once computed "today" in UTC. Between 4 PM and midnight Pacific, UTC is already on the next calendar day, so Pacific-today was marked as past and greyed out in the booking calendar. See DISCOVERY §8a #4. **Resolved Session 3 (commit `0ad9563` plus the broader migration to `lib/time.ts`):** all cited sites use `pacificToday()` and a sixth bug family (`new Date('YYYY-MM-DD').toLocaleDateString(...)`) was caught at 8 additional sites and fixed via `formatPacificDate`.
 
 **How to apply:** use the `lib/time.ts` helper to compute `pacificToday()`. The grep test above catches every current bug site.
 
@@ -98,25 +98,25 @@ Pricing is where the app most embarrassingly contradicts itself. It takes one sh
 
 **Grep test:** the substrings `* 20`, `* 40`, `basePrice`, and `lotSizeUnits` must appear only inside `lib/pricing.ts` (and its tests). Marketing UI components (`components/Pricing.tsx`, `components/Hero.tsx`) must import display values from that module, not restate them.
 
-**Why:** `app/api/book/route.ts:11-83` has the authoritative formula. `app/booking/success/page.tsx:24-26` has a duplicate that ignores lot size and shows $40 flat for a $160 booking. `components/Pricing.tsx` and `components/Hero.tsx` restate the same values in marketing copy. See DISCOVERY §8a #7.
+**Why:** `app/api/book/route.ts:11-83` once held the authoritative formula. `app/booking/success/page.tsx:24-26` had a duplicate that ignored lot size and showed $40 flat for a $160 booking. `components/Pricing.tsx` and `components/Hero.tsx` restated the same values in marketing copy. See DISCOVERY §8a #7. **Resolved cluster 1 (commits `dcc7308`, `2c5773d`, `3049471`):** `lib/pricing.ts` is the single source of truth — `calculateBookingPrice(lot_size, service_type)` plus `LOT_SIZE_UNITS`, `PICKUP_BASE_PER_UNIT`, `HAUL_AWAY_FEE`. The pricing math bug (haul-away as multiplier instead of flat surcharge) was also fixed in the same cluster. `Pricing.tsx` and `Hero.tsx` now display values consistent with the constants.
 
-**How to apply:** `lib/pricing.ts` exports `LOT_SIZE_UNITS`, `BASE_PRICE_BY_SERVICE`, and `computePrice({ service_type, lot_size }): number`. Every price the user sees — booking response, success page, email, admin dashboard — passes through one of those exports.
+**How to apply:** `lib/pricing.ts` exports `LOT_SIZE_UNITS`, `PICKUP_BASE_PER_UNIT`, `HAUL_AWAY_FEE`, and `calculateBookingPrice(lot_size, service_type): number`. Every price the user sees — booking response, success page, email, admin dashboard — passes through one of those exports.
 
 ### 3.2 The success page displays the price the server returned, not a locally-recomputed one.
 
 **Grep test:** `app/booking/success/page.tsx` must read `price` (or equivalent) from the URL query string or a dedicated API call — never recompute from `service_type` alone.
 
-**Why:** the current success page recomputes price as `service === 'Pick Up Only' ? 20 : 40` — lot size absent. See DISCOVERY §8a #7. Anywhere the UI guesses instead of asking, the guess will diverge from the server over time.
+**Why:** the success page once recomputed price as `service === 'Pick Up Only' ? 20 : 40` — lot size absent. See DISCOVERY §8a #7. Anywhere the UI guesses instead of asking, the guess diverges from the server over time. **Resolved cluster 1 (commit `2c5773d`, Path A):** `BookingForm` plumbs the API response's canonical `price` through `URLSearchParams` to `/booking/success`; the success page reads from the URL instead of recomputing.
 
-**How to apply:** the booking API already returns `{ success, bookingId, price }`. Plumb `price` through the redirect to the success page, or fetch the booking by ID. Either works; local recomputation does not.
+**How to apply:** the booking API returns `{ success, bookingId, price }`. Plumb `price` through the redirect to the success page, or fetch the booking by ID. Either works; local recomputation does not.
 
 ### 3.3 Service duration (90 min) is read from one place, not hardcoded in four.
 
 **Grep test:** the literal `90 * 60 * 1000` (and `90 minutes` phrasing outside of comments about the rule) must appear at most once in non-test code.
 
-**Why:** 90-minute duration is hardcoded in `lib/google-calendar.ts` and `lib/availability-engine.ts` (slot end calculation); the now-removed `app/api/review-request/route.ts` also relied on it implicitly. `business_settings.default_service_duration_minutes = 90` is seeded but nothing reads it. See ARCHITECTURE §4.
+**Why:** 90-minute duration is hardcoded in `lib/google-calendar.ts` and `lib/availability-engine.ts` (slot end calculation); the now-removed `app/api/review-request/route.ts` also relied on it implicitly. `business_settings.default_service_duration_minutes = 90` is seeded but nothing reads it. See ARCHITECTURE §4. **Partially resolved Session 3:** `lib/time.ts` exports `loadServiceDurationMinutes()` which reads the DB row with a constant fallback, and several call sites (e.g., `/api/review-request` before its removal, the cron path) use it. **Still live work:** the hardcoded `90 * 60 * 1000` literal still appears in `lib/google-calendar.ts` and `lib/availability-engine.ts` slot-end calculations — the grep test does not yet pass clean.
 
-**How to apply:** one export in `lib/time.ts` (or `lib/pricing.ts` — whichever is more cohesive), backed by the DB row, with a fallback.
+**How to apply:** one export in `lib/time.ts` (or `lib/pricing.ts` — whichever is more cohesive), backed by the DB row, with a fallback. `loadServiceDurationMinutes()` is that export; remaining call sites need migration to it.
 
 ---
 
@@ -142,11 +142,11 @@ The 2026-04-22 incident was a failure mode, not a feature bug. The pattern — "
 
 ### 4.3 Bookings succeed only when all critical downstream effects succeed OR the row records which one didn't.
 
-**Rule:** `/api/book` currently swallows calendar-insert failure and email-send failure. If those stay swallowed, the booking row must carry explicit columns: `google_event_id NULL` signals calendar failure; a `confirmation_email_sent_at` column (add it) signals email failure. An admin must be able to query "which bookings didn't notify the customer and don't have a calendar entry."
+**Rule:** `/api/book` once swallowed calendar-insert failure and email-send failure. If those stayed swallowed, the booking row had to carry explicit columns: `google_event_id NULL` signaling calendar failure; a `confirmation_email_sent_at` column signaling email failure. An admin must be able to query "which bookings didn't notify the customer and don't have a calendar entry."
 
-**Why:** DISCOVERY §8a #0 "Cascading consequence" — bookings are happening right now without calendar entries, and nobody knows which ones until manually checked.
+**Why:** DISCOVERY §8a #0 "Cascading consequence" — bookings were happening without calendar entries, and nobody knew which ones until manually checked. **Resolved Session 4 (commits `f49dc8b`, `d3b356d`, `7db14e3`):** migration 004 added `calendar_sync_status` (CHECK enum 'pending'|'success'|'failed') + `confirmation_email_sent_at TIMESTAMPTZ`; `/api/book` writes these on success, leaves the email column NULL on failure, sets sync status to 'failed' on calendar throw; `/api/admin/booking-health` surfaces three categories of gaps (`calendar_sync_failed`, `confirmation_email_missing`, `calendar_event_missing`). Rule satisfied.
 
-**How to apply:** add the tracking columns, have the route set them on success, leave them NULL on failure, and expose a filter in the admin UI (or at minimum a SQL query pattern in `docs/ops.md`) to find the gaps.
+**How to apply:** add tracking columns, have the route set them on success, leave them NULL on failure, and expose a filter in the admin UI (or at minimum a SQL query pattern in `docs/ops.md`) to find the gaps. The `/api/admin/booking-health` endpoint is that filter for the existing columns; new tracking columns added later should follow the same pattern.
 
 ---
 
@@ -166,7 +166,7 @@ Don't advertise features the infrastructure can't deliver. Every claim in user-f
 
 **Grep test:** any component string containing `reminder` or `confirmation email` must be traceable to a cron or route that has been verified as functional in production within the last month. Vaporware copy is forbidden.
 
-**Why:** `components/BookingForm.tsx:215` says "You'll get instant confirmation and reminders." `components/BookingForm.tsx:461` says "Send me a reminder the day before and 1 hour before my pick up." `app/booking/success/page.tsx:80-82` says "You'll also get reminder emails before we arrive!" None of these reminders are currently being sent because of the cron-method bug. See DISCOVERY §8a #1.
+**Why:** `components/BookingForm.tsx:215` says "You'll get instant confirmation and reminders." `components/BookingForm.tsx:461` says "Send me a reminder the day before and 1 hour before my pick up." `app/booking/success/page.tsx:80-82` says "You'll also get reminder emails before we arrive!" None of these reminders were being sent because of the cron-method bug. See DISCOVERY §8a #1. **Resolved 2026-04-23 (commit `d4b6740`):** the cron handlers were renamed from `POST` to `GET`; the 02:00 UTC tick following deploy returned 200 with handler bodies executing. The reminder copy in BookingForm and on the success page is no longer vaporware.
 
 **How to apply:** before adding or keeping a reminder-related string, verify the delivery path exists end to end (cron fires → route runs → email sends). When adding new copy, add a matching entry in `docs/ops.md` describing the delivery mechanism.
 
@@ -180,9 +180,9 @@ The repo should carry the operational facts the app depends on. Missing facts le
 
 **Grep test:** for every Supabase table name that appears in `.from('<table>')` calls, a matching `CREATE TABLE <table>` must exist in `database/migrations/*.sql`.
 
-**Why:** `bookings` and `reviews` are referenced by constraints in migration 001 but never created. The canonical schemas live only in the Supabase dashboard. Recreating the DB from this repo is impossible. See DISCOVERY §3.
+**Why:** `bookings` and `reviews` were referenced by constraints in migration 001 but never created. The canonical schemas lived only in the Supabase dashboard. Recreating the DB from this repo was impossible. See DISCOVERY §3. **Resolved Session 4 (commit `f49dc8b`):** migration `000_initial_tables.sql` captures both tables as `CREATE TABLE` statements pulled from Supabase. Rule satisfied.
 
-**How to apply:** add a migration `000_initial_tables.sql` that captures the current `bookings` and `reviews` schemas as of today. Pull the DDL from Supabase's SQL editor. Never create a table directly in the Supabase UI without also committing the migration.
+**How to apply:** never create a table directly in the Supabase UI without also committing a matching migration. When schema evolves (cluster 1 added migration 005 + 006; cluster 2 added 007; pattern continues), each migration becomes a delta on top of 000.
 
 ### 6.2 OAuth app publishing status and calendar ID identities are documented in `docs/ops.md`.
 
@@ -196,7 +196,14 @@ The repo should carry the operational facts the app depends on. Missing facts le
 
 **Grep test:** files that are never imported must not exist. After each cleanup pass, run `grep -r "from '@/lib/<name>'" | grep -v <name>.ts` — if the file is only self-referenced, delete it.
 
-**Why:** `lib/resend.ts`, `lib/admin-auth.ts`, `lib/errors.ts`, `hasTimeConflict` in `lib/google-calendar.ts`, `calculateServiceDuration` in `lib/availability.ts`, unused `business_settings` rows, the `audit_logs` table, and the `pending`/`cancelled` status values are all dead. The presence of dead code is itself a source of drift: it tells the next reader the system is more complex than it is, and it invites re-adoption with divergent logic. See DISCOVERY §8b.
+**Why:** `lib/resend.ts`, `lib/admin-auth.ts`, `lib/errors.ts`, `hasTimeConflict` in `lib/google-calendar.ts`, `calculateServiceDuration` in `lib/availability.ts`, unused `business_settings` rows, the `audit_logs` table, and the `pending`/`cancelled` status values were all dead. The presence of dead code is itself a source of drift: it tells the next reader the system is more complex than it is, and it invites re-adoption with divergent logic. See DISCOVERY §8b. **Largely resolved across clusters 1-3:**
+- Cluster 1 (commit `2ce006b`) deleted `lib/resend.ts`, `lib/admin-auth.ts`, `lib/errors.ts`, `hasTimeConflict`, `calculateServiceDuration` and uninstalled the corresponding dead deps.
+- Cluster 2 (commit `ab9e395`) removed the entire `/api/review-request` workflow including `sendReviewRequest` + `validateReviewData` + `ReviewData` orphans.
+- Cluster 3 (commits `7fa3b07`, `26c4e91`) removed `components/Testimonials.tsx` (fake hardcoded testimonials) and dropped `'pending'` and `'cancelled'` from validation `STATUSES`.
+- `business_settings.timezone` and `default_service_duration_minutes` are now READ by `loadBusinessTimezone` / `loadServiceDurationMinutes` in `lib/time.ts` (Session 3) — no longer dead rows.
+- `audit_logs` write path lives via migration 006 with no reader (acknowledged caveat in `docs/ops.md`; `audit_trigger.changed_by` is `NULL` under service-role connections).
+
+Remaining: plural `PERSONAL_CALENDAR_IDS` env var still drift (deferred per `docs/ops.md`).
 
 **How to apply:** when cleaning up, remove the file, the dependency, the row, and the reference in one commit. If "might need it later" is tempting, the git history is the archive.
 
@@ -204,7 +211,7 @@ The repo should carry the operational facts the app depends on. Missing facts le
 
 **Grep test:** the strings `coming soon`, `🚧`, `placeholder` must not appear in `/admin/*` pages in production code. Feature cards on the login screen (`app/admin/page.tsx:108-127`) must correspond to tabs that render a working UI.
 
-**Why:** `/admin/dashboard` advertises "Bookings", "Customers", "Finances" in the login screen, then shows literal "coming soon!" placeholders inside the dashboard for three of the five tabs. The standalone `/admin/customers` page works but is unlinked. This is vaporware inside the admin surface. See DISCOVERY §8c #3.
+**Why:** `/admin/dashboard` once advertised "Bookings", "Customers", "Finances" in the login screen, then showed literal "coming soon!" placeholders inside the dashboard for three of the five tabs. The standalone `/admin/customers` page worked but was unlinked. This was vaporware inside the admin surface. See DISCOVERY §8c #3. **Resolved cluster 2 (commits `cb003dc`, `d932fec`, `c8f5428`):** Bookings tab is a sortable full-list table with per-row Complete/Edit actions; Finances tab shows real revenue + tips + payment-method breakdown + 6-month buckets; Customers tab is a link card to the existing standalone page. All five tabs functional.
 
 **How to apply:** either build the feature, delete the tab, or link to the working page. No middle state.
 
@@ -230,7 +237,7 @@ This is a single-tenant hobby app with specific constraints. Don't accidentally 
 
 ### 7.3 No new dependencies without a one-line justification.
 
-**Why:** `resend`, `@react-email/components`, `react-email`, and `vercel` are all in `package.json` without being imported by live code. Each was added for a reason that didn't end up shipping. The inventory should shrink over time, not grow. See DISCOVERY §8b.
+**Why:** `resend`, `@react-email/components`, `react-email`, and `vercel` were all in `package.json` without being imported by live code. Each was added for a reason that didn't end up shipping. The inventory should shrink over time, not grow. See DISCOVERY §8b. **Resolved cluster 1 (commit `2ce006b`):** all four uninstalled in the dead-code cleanup pass alongside the lib files that referenced them.
 
 **How to apply:** any PR that adds a dependency must state in its description the one-line reason and the specific code that uses it. When removing dependencies, remove them from `package.json` and `package-lock.json` in the same commit as the code that used them.
 
@@ -241,3 +248,5 @@ This is a single-tenant hobby app with specific constraints. Don't accidentally 
 | Date | Rule(s) affected | Change | Reason |
 |---|---|---|---|
 | 2026-04-22 | initial | Constitution created based on DISCOVERY_REPORT.md §8 | — |
+| 2026-04-27 | §2.1, §2.2, §2.3, §3.3, §4.1, §5.1 | Removed `app/api/review-request/route.ts` from "Why" example lists; updated text to reflect single remaining cron and historical fix commits | Cluster 2 review-request workflow removal (commit `1c214db`) |
+| 2026-04-28 | §1.3, §2.1, §2.4, §3.1, §3.2, §3.3, §4.3, §5.2, §6.1, §6.3, §6.4, §7.3 | Past-tensed "Why" sections + appended one-line resolution pointers (Session/cluster X, commit SHAs). §3.3 noted as partially resolved (DB-backed loader exists; hardcoded literal still in two files). Rules unchanged. | Reconcile with cluster 1/2/3 reality after 7 days of cleanup work |
